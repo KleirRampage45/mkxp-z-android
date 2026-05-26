@@ -10,10 +10,9 @@ import android.view.View;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ViewGroup.LayoutParams;
-import android.view.ViewGroup;
 import android.widget.TextView;
-import android.widget.LinearLayout;
 import android.widget.FrameLayout;
+import android.widget.RelativeLayout;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -74,7 +73,6 @@ public class MainActivity extends SDLActivity
 
     // For portrait console split layout
     private FrameLayout mGamepadContainer;
-    private View mSurfaceView;
     private boolean mIsPortraitConsole = false;
 
     private void runSDLThread()
@@ -130,13 +128,14 @@ public class MainActivity extends SDLActivity
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
-        super.onCreate(savedInstanceState);
-
         // Read launcher settings
         readLauncherSettings();
 
-        // Apply orientation
+        // SDL creates its SurfaceView inside super.onCreate(), so request the
+        // target orientation before the native surface is created.
         applyOrientation();
+
+        super.onCreate(savedInstanceState);
 
         String requestedGamePath = getIntent().getStringExtra(EXTRA_GAME_PATH);
         boolean launchedWithGamePath = requestedGamePath != null && !requestedGamePath.isEmpty();
@@ -175,14 +174,12 @@ public class MainActivity extends SDLActivity
         mGamepad.setOnKeyDownListener(SDLActivity::onNativeKeyDown);
         mGamepad.setOnKeyUpListener(SDLActivity::onNativeKeyUp);
 
-        // Attach gamepad to layout
-        if (mLayout != null) {
-            mGamepad.attachTo(this, mLayout);
-        }
-
-        // In portrait console mode, rearrange layout for split view
+        // Attach gamepad after the target layout exists. Portrait mode needs a
+        // dedicated lower panel; landscape keeps the upstream overlay behavior.
         if (mIsPortraitConsole && mLayout != null) {
             rearrangeForPortraitConsole();
+        } else if (mLayout != null) {
+            mGamepad.attachTo(this, mLayout);
         }
 
         // Setup FPS textview
@@ -191,7 +188,7 @@ public class MainActivity extends SDLActivity
         tvFps.setTextColor(Color.argb(96, 255, 255, 255));
         tvFps.setVisibility(View.GONE);
 
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
         params.setMargins(16, 16, 0, 0);
         tvFps.setLayoutParams(params);
 
@@ -246,80 +243,58 @@ public class MainActivity extends SDLActivity
     private void rearrangeForPortraitConsole()
     {
         try {
-            // Find the SurfaceView (SDL creates it as first child of mLayout)
-            if (mLayout.getChildCount() > 0) {
-                mSurfaceView = mLayout.getChildAt(0);
-
-                // Remove all children for re-arrangement
-                mLayout.removeAllViews();
+            if (mSurface != null) {
+                mLayout.removeView(mSurface);
 
                 // Create a container for the game viewport at native ratio
-                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                DisplayMetrics metrics = getResources().getDisplayMetrics();
+                int screenWidth = metrics.widthPixels;
+                int screenHeight = metrics.heightPixels;
                 // VX Ace native resolution: 544x416 (4:3)
                 int gameHeight = (int) (screenWidth * 416.0 / 544.0);
+                int maxGameHeight = (int) (screenHeight * 0.55f);
+                if (maxGameHeight > 0) {
+                    gameHeight = Math.min(gameHeight, maxGameHeight);
+                }
 
                 FrameLayout viewportContainer = new FrameLayout(this);
-                viewportContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                int viewportId = View.generateViewId();
+                viewportContainer.setId(viewportId);
+                RelativeLayout.LayoutParams viewportParams = new RelativeLayout.LayoutParams(
                     LayoutParams.MATCH_PARENT,
                     gameHeight
-                ));
+                );
+                viewportParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+                viewportContainer.setLayoutParams(viewportParams);
                 viewportContainer.setBackgroundColor(Color.rgb(0, 0, 0));
 
                 // Put the surface in the viewport container
-                mSurfaceView.setLayoutParams(new FrameLayout.LayoutParams(
+                mSurface.setLayoutParams(new FrameLayout.LayoutParams(
                     LayoutParams.MATCH_PARENT,
                     LayoutParams.MATCH_PARENT
                 ));
-                viewportContainer.addView(mSurfaceView);
+                viewportContainer.addView(mSurface);
                 mLayout.addView(viewportContainer);
 
                 // Create a container for the gamepad below
                 mGamepadContainer = new FrameLayout(this);
-                mGamepadContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                RelativeLayout.LayoutParams controlsParams = new RelativeLayout.LayoutParams(
                     LayoutParams.MATCH_PARENT,
-                    0,
-                    1.0f // Fill remaining space
-                ));
+                    LayoutParams.MATCH_PARENT
+                );
+                controlsParams.addRule(RelativeLayout.BELOW, viewportId);
+                controlsParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+                mGamepadContainer.setLayoutParams(controlsParams);
                 mGamepadContainer.setBackgroundColor(Color.rgb(12, 11, 14));
                 mLayout.addView(mGamepadContainer);
 
-                // Move the gamepad layout into the container
-                View gamepadLayout = null;
-                for (int i = 0; i < mGamepadContainer.getChildCount(); i++) {
-                    // After attachTo, gamepad_layout might be here
-                }
-                // The gamepad was already attached to mLayout before our rearrange.
-                // Find it by searching through mLayout's original children.
-                // We need to find the gamepad_layout ViewGroup.
-                // Actually, the gamepad attachTo added it to mLayout. Now that
-                // we cleared mLayout, we need to find where it went.
-                // Let's search the view hierarchy.
-                gamepadLayout = findViewByTagOrId(null, R.id.gamepad_layout);
-                if (gamepadLayout == null) {
-                    // Fallback: the gamepad might have been already removed.
-                    // Re-attach it to the new container.
-                    mGamepad.attachTo(this, mGamepadContainer);
-                } else if (gamepadLayout.getParent() instanceof ViewGroup) {
-                    ((ViewGroup) gamepadLayout.getParent()).removeView(gamepadLayout);
-                    gamepadLayout.setLayoutParams(new FrameLayout.LayoutParams(
-                        LayoutParams.MATCH_PARENT,
-                        LayoutParams.MATCH_PARENT
-                    ));
-                    mGamepadContainer.addView(gamepadLayout);
-                }
+                mGamepad.attachTo(this, mGamepadContainer);
 
                 Log.i(TAG, "Portrait console layout: " + screenWidth + "x" + gameHeight + " viewport");
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to rearrange for portrait console: " + e.getMessage());
         }
-    }
-
-    /** Find a view by resource ID in the entire view tree. */
-    private View findViewByTagOrId(ViewGroup root, int id)
-    {
-        ViewGroup searchRoot = root != null ? root : (ViewGroup) getWindow().getDecorView();
-        return searchRoot.findViewById(id);
     }
 
     @Override
