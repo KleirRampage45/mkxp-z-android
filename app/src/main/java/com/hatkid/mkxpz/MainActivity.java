@@ -50,6 +50,7 @@ public class MainActivity extends SDLActivity
     public static final String EXTRA_TOUCH_OPACITY   = "com.grimmobile.runner.extra.TOUCH_OPACITY";
     public static final String EXTRA_TOUCH_SCALE     = "com.grimmobile.runner.extra.TOUCH_SCALE";
     public static final String EXTRA_HAPTICS_ENABLED = "com.grimmobile.runner.extra.HAPTICS_ENABLED";
+    public static final String EXTRA_HAPTIC_INTENSITY = "com.grimmobile.runner.extra.HAPTIC_INTENSITY";
     public static final String EXTRA_TEXT_SCALE      = "com.grimmobile.runner.extra.TEXT_SCALE";
     public static final String EXTRA_INTEGER_SCALING = "com.grimmobile.runner.extra.INTEGER_SCALING";
 
@@ -209,6 +210,7 @@ public class MainActivity extends SDLActivity
             + " touchOpacity=" + intent.getFloatExtra(EXTRA_TOUCH_OPACITY, 0.72f)
             + " touchScale=" + intent.getFloatExtra(EXTRA_TOUCH_SCALE, 1.0f)
             + " haptics=" + intent.getBooleanExtra(EXTRA_HAPTICS_ENABLED, true)
+            + " hapticIntensity=" + intent.getFloatExtra(EXTRA_HAPTIC_INTENSITY, 0.55f)
             + " textScale=" + intent.getFloatExtra(EXTRA_TEXT_SCALE, 1.0f)
             + " integerScaling=" + intent.getBooleanExtra(EXTRA_INTEGER_SCALING, false));
     }
@@ -330,6 +332,9 @@ public class MainActivity extends SDLActivity
         mPortraitControls.setOpacity(Math.max(0.15f, Math.min(1.0f, mGamepadConfig.opacity / 100f)));
         mPortraitControls.setScale(Math.max(1.18f, Math.min(1.55f, mGamepadConfig.scale / 100f)));
         mPortraitControls.setHapticsEnabled(getIntent().getBooleanExtra(EXTRA_HAPTICS_ENABLED, true));
+        mPortraitControls.setHapticIntensity(
+            Math.max(0.0f, Math.min(1.0f, getIntent().getFloatExtra(EXTRA_HAPTIC_INTENSITY, 0.55f)))
+        );
         mPortraitControls.setOnInput((zone, pressed) -> {
             int keyCode = keyCodeForZone(zone);
             if (keyCode != 0) {
