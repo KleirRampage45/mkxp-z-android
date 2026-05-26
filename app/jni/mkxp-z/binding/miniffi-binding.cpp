@@ -3,6 +3,7 @@
 
 #include <SDL.h>
 #include <cstdint>
+#include <cstring>
 
 #include "filesystem/filesystem.h"
 #include "miniffi.h"
@@ -31,10 +32,30 @@
 #define _T_INTEGER 3
 #define _T_BOOL 4
 
-#if RAPI_FULL > 187
-DEF_TYPE_CUSTOMFREE(MiniFFI, SDL_UnloadObject);
+static void MiniFFI_Free(void *libhandle) {
+    if (libhandle)
+        SDL_UnloadObject(libhandle);
+}
+
+static bool MiniFFI_IsAndroidSteamApi(const char *libname) {
+#ifdef __ANDROID__
+    return libname && strstr(libname, "steam_api") != 0;
 #else
-DEF_ALLOCFUNC_CUSTOMFREE(MiniFFI, SDL_UnloadObject);
+    return false;
+#endif
+}
+
+static mffi_value MiniFFI_SteamApiNoop(mffi_value, mffi_value, mffi_value,
+                                       mffi_value, mffi_value, mffi_value,
+                                       mffi_value, mffi_value, mffi_value,
+                                       mffi_value) {
+    return 1;
+}
+
+#if RAPI_FULL > 187
+DEF_TYPE_CUSTOMFREE(MiniFFI, MiniFFI_Free);
+#else
+DEF_ALLOCFUNC_CUSTOMFREE(MiniFFI, MiniFFI_Free);
 #endif
 
 static void *MiniFFI_GetFunctionHandle(void *libhandle, const char *func) {
@@ -54,10 +75,12 @@ RB_METHOD(MiniFFI_initialize) {
 #ifdef __APPLE__
     void *hlib = SDL_LoadObject(mkxp_fs::normalizePath(RSTRING_PTR(libname), 1, 1).c_str());
 #else
-    void *hlib = SDL_LoadObject(RSTRING_PTR(libname));
+    void *hlib = MiniFFI_IsAndroidSteamApi(RSTRING_PTR(libname)) ? 0 : SDL_LoadObject(RSTRING_PTR(libname));
 #endif
     setPrivateData(self, hlib);
-    void *hfunc = MiniFFI_GetFunctionHandle(hlib, RSTRING_PTR(func));
+    void *hfunc = MiniFFI_IsAndroidSteamApi(RSTRING_PTR(libname)) ?
+        (void *)MiniFFI_SteamApiNoop :
+        MiniFFI_GetFunctionHandle(hlib, RSTRING_PTR(func));
 #ifdef __WIN32__
     if (hlib && !hfunc) {
         VALUE func_a = rb_str_new3(func);

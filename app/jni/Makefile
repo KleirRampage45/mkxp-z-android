@@ -93,6 +93,7 @@ CMAKE_ARGS := \
 	-DCMAKE_PREFIX_PATH="$(BUILD_PREFIX)" \
 	-DCMAKE_BUILD_TYPE=RelWithDebInfo \
 	-DCMAKE_C_FLAGS="$(CFLAGS)" \
+	-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 	-G "Unix Makefiles"
 
 # Autoconf environment variables

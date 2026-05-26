@@ -14,6 +14,9 @@ android {
         versionName "0.1.1"
         archivesBaseName = "mkxp-z-$versionName"
         ndk.debugSymbolLevel = 'FULL'
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
 
     buildTypes {
@@ -33,7 +36,7 @@ android {
             enable true
             reset()
             // You can build also 'x86' and 'x86_64' if you want (useful for AVD debugging)
-            include 'armeabi-v7a', 'arm64-v8a'
+            include 'arm64-v8a'
             universalApk true
         }
     }

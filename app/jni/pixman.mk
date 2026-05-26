@@ -10,8 +10,7 @@ LOCAL_CFLAGS := \
 	-DPIXMAN_NO_TLS \
 	-D_USE_MATH_DEFINES \
 	-Wno-unknown-attributes \
-	-Wno-expansion-to-defined \
-	-fno-integrated-as
+	-Wno-expansion-to-defined
 
 LOCAL_C_INCLUDES := \
 	$(LOCAL_PRECONFIG_PATH)/pixman \
@@ -65,11 +64,10 @@ ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 		$(LOCAL_PATH)/pixman/pixman-arm-neon-asm.S \
 		$(LOCAL_PATH)/pixman/pixman-arm-neon-asm-bilinear.S
 else ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
-	LOCAL_CFLAGS += -DUSE_ARM_NEON -DUSE_ARM_A64_NEON
-	LOCAL_SRC_FILES += \
-		$(LOCAL_PATH)/pixman/pixman-arm-neon.c \
-		$(LOCAL_PATH)/pixman/pixman-arma64-neon-asm.S \
-		$(LOCAL_PATH)/pixman/pixman-arma64-neon-asm-bilinear.S
+	# The AArch64 NEON assembly in this Pixman snapshot does not assemble
+	# cleanly with the current Android NDK/Clang toolchain. Use Pixman's
+	# generic C paths for the runtime bring-up; optimized blitters can be
+	# restored after the native runner boots.
 else ifeq ($(TARGET_ARCH_ABI), x86)
 	LOCAL_CFLAGS += -DUSE_X86_MMX -DUSE_SSE2 -DUSE_SSSE3
 	LOCAL_SRC_FILES += \
