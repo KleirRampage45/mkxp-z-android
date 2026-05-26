@@ -404,7 +404,6 @@ public class MainActivity extends SDLActivity
     protected void onDestroy()
     {
         super.onDestroy();
-        System.exit(0);
     }
 
     @Override
