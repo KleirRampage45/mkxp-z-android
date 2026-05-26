@@ -83,14 +83,14 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // Called when we have a valid drawing surface
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        Log.v("SDL", "surfaceCreated()");
+        Log.i("SDL", "surfaceCreated() view=" + getWidth() + "x" + getHeight());
         SDLActivity.onNativeSurfaceCreated();
     }
 
     // Called when we lose the surface
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.v("SDL", "surfaceDestroyed()");
+        Log.i("SDL", "surfaceDestroyed() view=" + getWidth() + "x" + getHeight());
 
         // Transition to pause, if needed
         SDLActivity.mNextNativeState = SDLActivity.NativeState.PAUSED;
@@ -104,7 +104,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     @Override
     public void surfaceChanged(SurfaceHolder holder,
                                int format, int width, int height) {
-        Log.v("SDL", "surfaceChanged()");
+        Log.i("SDL", "surfaceChanged() format=" + format + " holder=" + holder);
 
         if (SDLActivity.mSingleton == null) {
             return;
@@ -130,15 +130,15 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             SDLActivity.getContext().notifyAll();
         }
 
-        Log.v("SDL", "Window size: " + width + "x" + height);
-        Log.v("SDL", "Device size: " + nDeviceWidth + "x" + nDeviceHeight);
-        SDLActivity.nativeSetScreenResolution(width, height, nDeviceWidth, nDeviceHeight, mDisplay.getRefreshRate());
-        SDLActivity.onNativeResize();
-
         // Prevent a screen distortion glitch,
         // for instance when the device is in Landscape and a Portrait App is resumed.
         boolean skip = false;
         int requestedOrientation = SDLActivity.mSingleton.getRequestedOrientation();
+        Log.i("SDL", "Window size: " + width + "x" + height);
+        Log.i("SDL", "Device size: " + nDeviceWidth + "x" + nDeviceHeight
+            + " requestedOrientation=" + requestedOrientation);
+        SDLActivity.nativeSetScreenResolution(width, height, nDeviceWidth, nDeviceHeight, mDisplay.getRefreshRate());
+        SDLActivity.onNativeResize();
 
         if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT || requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT) {
             if (mWidth > mHeight) {
@@ -156,7 +156,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
            double max = Math.max(mWidth, mHeight);
 
            if (max / min < 1.20) {
-              Log.v("SDL", "Don't skip on such aspect-ratio. Could be a square resolution.");
+              Log.i("SDL", "Don't skip on such aspect-ratio. Could be a square resolution.");
               skip = false;
            }
         }
@@ -165,14 +165,14 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         if (skip) {
             if (Build.VERSION.SDK_INT >= 24) {
                 if (SDLActivity.mSingleton.isInMultiWindowMode()) {
-                    Log.v("SDL", "Don't skip in Multi-Window");
+                    Log.i("SDL", "Don't skip in Multi-Window");
                     skip = false;
                 }
             }
         }
 
         if (skip) {
-           Log.v("SDL", "Skip .. Surface is not ready.");
+           Log.w("SDL", "Skip .. Surface is not ready.");
            mIsSurfaceReady = false;
            return;
         }
@@ -182,6 +182,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
 
         /* Surface is ready */
         mIsSurfaceReady = true;
+        Log.i("SDL", "Surface ready, native state will resume");
 
         SDLActivity.mNextNativeState = SDLActivity.NativeState.RESUMED;
         SDLActivity.handleNativeState();

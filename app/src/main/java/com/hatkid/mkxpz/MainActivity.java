@@ -30,9 +30,11 @@ import java.util.Locale;
 import java.io.File;
 
 import org.libsdl.app.SDLActivity;
+import com.grimmobile.runner.input.TouchOverlayView;
 import com.hatkid.mkxpz.gamepad.Gamepad;
 import com.hatkid.mkxpz.gamepad.GamepadConfig;
 import com.grimmobile.runner.R;
+import kotlin.Unit;
 
 public class MainActivity extends SDLActivity
 {
@@ -67,12 +69,14 @@ public class MainActivity extends SDLActivity
     // In-screen gamepad
     private final Gamepad mGamepad = new Gamepad();
     private boolean mGamepadInvisible = false;
+    private GamepadConfig mGamepadConfig;
 
     // Layout mode from launcher
     private String mLayoutMode = MODE_LANDSCAPE;
 
     // For portrait console split layout
     private FrameLayout mGamepadContainer;
+    private TouchOverlayView mPortraitControls;
     private boolean mIsPortraitConsole = false;
 
     private void runSDLThread()
@@ -169,8 +173,8 @@ public class MainActivity extends SDLActivity
 
         // Setup in-screen gamepad
         mGamepadInvisible = (isAndroidTV() || isChromebook());
-        GamepadConfig gpadConfig = buildGamepadConfig();
-        mGamepad.init(gpadConfig, mGamepadInvisible);
+        mGamepadConfig = buildGamepadConfig();
+        mGamepad.init(mGamepadConfig, mGamepadInvisible);
         mGamepad.setOnKeyDownListener(SDLActivity::onNativeKeyDown);
         mGamepad.setOnKeyUpListener(SDLActivity::onNativeKeyUp);
 
@@ -201,6 +205,12 @@ public class MainActivity extends SDLActivity
         mLayoutMode = intent.getStringExtra(EXTRA_LAYOUT_MODE);
         if (mLayoutMode == null) mLayoutMode = MODE_LANDSCAPE;
         mIsPortraitConsole = MODE_PORTRAIT_CONSOLE.equals(mLayoutMode);
+        Log.i(TAG, "Launcher settings: layout=" + mLayoutMode
+            + " touchOpacity=" + intent.getFloatExtra(EXTRA_TOUCH_OPACITY, 0.72f)
+            + " touchScale=" + intent.getFloatExtra(EXTRA_TOUCH_SCALE, 1.0f)
+            + " haptics=" + intent.getBooleanExtra(EXTRA_HAPTICS_ENABLED, true)
+            + " textScale=" + intent.getFloatExtra(EXTRA_TEXT_SCALE, 1.0f)
+            + " integerScaling=" + intent.getBooleanExtra(EXTRA_INTEGER_SCALING, false));
     }
 
     private void applyOrientation()
@@ -288,12 +298,67 @@ public class MainActivity extends SDLActivity
                 mGamepadContainer.setBackgroundColor(Color.rgb(12, 11, 14));
                 mLayout.addView(mGamepadContainer);
 
-                mGamepad.attachTo(this, mGamepadContainer);
+                attachPortraitControls();
 
-                Log.i(TAG, "Portrait console layout: " + screenWidth + "x" + gameHeight + " viewport");
+                Log.i(TAG, "Portrait console layout: viewport=" + screenWidth + "x" + gameHeight
+                    + " controlsHeight~=" + (screenHeight - gameHeight)
+                    + " surfaceParent=" + mSurface.getParent().getClass().getSimpleName());
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to rearrange for portrait console: " + e.getMessage());
+        }
+    }
+
+    private void attachPortraitControls()
+    {
+        mPortraitControls = new TouchOverlayView(this);
+        mPortraitControls.setControlsOnly(true);
+        mPortraitControls.setOpacity(Math.max(0.15f, Math.min(1.0f, mGamepadConfig.opacity / 100f)));
+        mPortraitControls.setScale(Math.max(0.75f, Math.min(1.35f, mGamepadConfig.scale / 100f)));
+        mPortraitControls.setHapticsEnabled(getIntent().getBooleanExtra(EXTRA_HAPTICS_ENABLED, true));
+        mPortraitControls.setOnInput((zone, pressed) -> {
+            int keyCode = keyCodeForZone(zone);
+            if (keyCode != 0) {
+                if (pressed) {
+                    SDLActivity.onNativeKeyDown(keyCode);
+                } else {
+                    SDLActivity.onNativeKeyUp(keyCode);
+                }
+            }
+            return Unit.INSTANCE;
+        });
+        mGamepadContainer.addView(
+            mPortraitControls,
+            new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+        );
+        Log.i(TAG, "Portrait controls attached with custom layout view");
+    }
+
+    private int keyCodeForZone(TouchOverlayView.Zone zone)
+    {
+        switch (zone) {
+            case DPAD_UP:
+                return KeyEvent.KEYCODE_DPAD_UP;
+            case DPAD_DOWN:
+                return KeyEvent.KEYCODE_DPAD_DOWN;
+            case DPAD_LEFT:
+                return KeyEvent.KEYCODE_DPAD_LEFT;
+            case DPAD_RIGHT:
+                return KeyEvent.KEYCODE_DPAD_RIGHT;
+            case BTN_A:
+            case START:
+                return mGamepadConfig.keycodeA;
+            case BTN_B:
+            case MENU:
+                return mGamepadConfig.keycodeB;
+            case BTN_X:
+                return mGamepadConfig.keycodeX;
+            case BTN_Y:
+                return mGamepadConfig.keycodeY;
+            case SELECT:
+                return mGamepadConfig.keycodeSHIFT;
+            default:
+                return 0;
         }
     }
 
