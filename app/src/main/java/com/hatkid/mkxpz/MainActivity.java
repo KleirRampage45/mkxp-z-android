@@ -10,8 +10,10 @@ import android.view.View;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ViewGroup.LayoutParams;
+import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.LinearLayout;
+import android.widget.FrameLayout;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -31,17 +33,29 @@ import java.io.File;
 import org.libsdl.app.SDLActivity;
 import com.hatkid.mkxpz.gamepad.Gamepad;
 import com.hatkid.mkxpz.gamepad.GamepadConfig;
+import com.grimmobile.runner.R;
 
 public class MainActivity extends SDLActivity
 {
-    // This activity inherits from SDLActivity activity.
-    // Put your Java-side stuff here.
-
     private static final String TAG = "mkxp-z[Activity]";
+    public static final String EXTRA_GAME_PATH = "com.grimmobile.runner.extra.GAME_PATH";
     private static final String GAME_PATH_DEFAULT = Environment.getExternalStorageDirectory() + "/mkxp-z";
     private static String GAME_PATH = GAME_PATH_DEFAULT;
     private static String OBB_MAIN_FILENAME;
     private static boolean DEBUG = false;
+
+    // Settings extras (from Grimmobile launcher)
+    public static final String EXTRA_LAYOUT_MODE     = "com.grimmobile.runner.extra.LAYOUT_MODE";
+    public static final String EXTRA_TOUCH_OPACITY   = "com.grimmobile.runner.extra.TOUCH_OPACITY";
+    public static final String EXTRA_TOUCH_SCALE     = "com.grimmobile.runner.extra.TOUCH_SCALE";
+    public static final String EXTRA_HAPTICS_ENABLED = "com.grimmobile.runner.extra.HAPTICS_ENABLED";
+    public static final String EXTRA_TEXT_SCALE      = "com.grimmobile.runner.extra.TEXT_SCALE";
+    public static final String EXTRA_INTEGER_SCALING = "com.grimmobile.runner.extra.INTEGER_SCALING";
+
+    // Layout modes (match RunnerSettings.LayoutMode)
+    private static final String MODE_LANDSCAPE      = "LANDSCAPE";
+    private static final String MODE_PORTRAIT_CONSOLE = "PORTRAIT_CONSOLE";
+    private static final String MODE_GAMEPAD        = "GAMEPAD";
 
     protected boolean mStarted = false;
 
@@ -55,15 +69,23 @@ public class MainActivity extends SDLActivity
     private final Gamepad mGamepad = new Gamepad();
     private boolean mGamepadInvisible = false;
 
+    // Layout mode from launcher
+    private String mLayoutMode = MODE_LANDSCAPE;
+
+    // For portrait console split layout
+    private FrameLayout mGamepadContainer;
+    private View mSurfaceView;
+    private boolean mIsPortraitConsole = false;
+
     private void runSDLThread()
     {
         if (!mStarted) {
             Log.i(TAG, "Game path: " + GAME_PATH);
+            Log.i(TAG, "Layout mode: " + mLayoutMode);
         }
 
         mStarted = true;
 
-        // Run (resume) native SDL thread
         if (mHasMultiWindow) {
             resumeNativeThread();
         }
@@ -75,9 +97,7 @@ public class MainActivity extends SDLActivity
         public void onObbStateChange(String path, int state)
         {
             super.onObbStateChange(path, state);
-
             Log.v(TAG, "OBB state of " + path + " changed to " + state);
-
             switch (state)
             {
                 case OnObbStateChangeListener.MOUNTED:
@@ -85,17 +105,14 @@ public class MainActivity extends SDLActivity
                     Log.v(TAG, "OBB " + path + " is mounted to " + obbPath);
                     GAME_PATH = obbPath;
                     break;
-
                 case OnObbStateChangeListener.UNMOUNTED:
                     Log.v(TAG, "OBB " + path + " is unmounted");
                     GAME_PATH = GAME_PATH_DEFAULT;
                     break;
-
                 default:
                     Log.e(TAG, "Failed to mount OBB " + path + ": Got state " + state);
                     break;
             }
-
             runSDLThread();
         }
     };
@@ -105,7 +122,6 @@ public class MainActivity extends SDLActivity
     {
         if (requestCode == 110) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-                // Close the App because the User did not allow the all files access permission to be used.
                 mSingleton.finish();
             }
         }
@@ -116,17 +132,26 @@ public class MainActivity extends SDLActivity
     {
         super.onCreate(savedInstanceState);
 
-        mMainHandler = new Handler(getMainLooper());
+        // Read launcher settings
+        readLauncherSettings();
 
+        // Apply orientation
+        applyOrientation();
+
+        String requestedGamePath = getIntent().getStringExtra(EXTRA_GAME_PATH);
+        boolean launchedWithGamePath = requestedGamePath != null && !requestedGamePath.isEmpty();
+        if (launchedWithGamePath) {
+            GAME_PATH = requestedGamePath;
+        }
+
+        mMainHandler = new Handler(getMainLooper());
         mStorageManager = (StorageManager) getSystemService(STORAGE_SERVICE);
         mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 
-        // Get main OBB filepath
-        final String obbPrefix = "main"; // "main", "patch"
+        final String obbPrefix = "main";
         final int obbVersion = 1;
         OBB_MAIN_FILENAME = getObbDir() + "/" + obbPrefix + "." + obbVersion + "." + getPackageName() + ".obb";
 
-        // Get Debug flag
         try {
             ActivityInfo actInfo = getPackageManager().getActivityInfo(this.getComponentName(), PackageManager.GET_META_DATA);
             DEBUG = actInfo.metaData.getBoolean("mkxp_debug");
@@ -135,12 +160,9 @@ public class MainActivity extends SDLActivity
             e.printStackTrace();
         }
 
-        // Check for all files access permission (Android 11+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !launchedWithGamePath) {
             if (!Environment.isExternalStorageManager()) {
-                // Request all files access permission
-                // TODO: AlertDialog: polite notice that mkxp-z requires All Files Access permission.
-                Uri uri = Uri.parse("package:" + BuildConfig.APPLICATION_ID);
+                Uri uri = Uri.parse("package:" + getPackageName());
                 Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri);
                 startActivityForResult(intent, 110);
             }
@@ -148,13 +170,19 @@ public class MainActivity extends SDLActivity
 
         // Setup in-screen gamepad
         mGamepadInvisible = (isAndroidTV() || isChromebook());
-        GamepadConfig gpadConfig = new GamepadConfig();
+        GamepadConfig gpadConfig = buildGamepadConfig();
         mGamepad.init(gpadConfig, mGamepadInvisible);
         mGamepad.setOnKeyDownListener(SDLActivity::onNativeKeyDown);
         mGamepad.setOnKeyUpListener(SDLActivity::onNativeKeyUp);
 
+        // Attach gamepad to layout
         if (mLayout != null) {
             mGamepad.attachTo(this, mLayout);
+        }
+
+        // In portrait console mode, rearrange layout for split view
+        if (mIsPortraitConsole && mLayout != null) {
+            rearrangeForPortraitConsole();
         }
 
         // Setup FPS textview
@@ -170,26 +198,150 @@ public class MainActivity extends SDLActivity
         mLayout.addView(tvFps);
     }
 
+    private void readLauncherSettings()
+    {
+        Intent intent = getIntent();
+        mLayoutMode = intent.getStringExtra(EXTRA_LAYOUT_MODE);
+        if (mLayoutMode == null) mLayoutMode = MODE_LANDSCAPE;
+        mIsPortraitConsole = MODE_PORTRAIT_CONSOLE.equals(mLayoutMode);
+    }
+
+    private void applyOrientation()
+    {
+        switch (mLayoutMode) {
+            case MODE_PORTRAIT_CONSOLE:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                break;
+            case MODE_LANDSCAPE:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                break;
+            case MODE_GAMEPAD:
+            default:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                break;
+        }
+    }
+
+    private GamepadConfig buildGamepadConfig()
+    {
+        Intent intent = getIntent();
+        GamepadConfig config = new GamepadConfig();
+
+        // Read touch settings from launcher extras
+        if (intent.hasExtra(EXTRA_TOUCH_OPACITY)) {
+            config.opacity = (int) (intent.getFloatExtra(EXTRA_TOUCH_OPACITY, 0.72f) * 100);
+        }
+        if (intent.hasExtra(EXTRA_TOUCH_SCALE)) {
+            config.scale = (int) (intent.getFloatExtra(EXTRA_TOUCH_SCALE, 1.0f) * 100);
+        }
+
+        return config;
+    }
+
+    /**
+     * Rearrange the SDL layout for portrait console mode.
+     * The SurfaceView goes to the top at native VX Ace ratio (544:416 = 4:3),
+     * and the gamepad goes below.
+     */
+    private void rearrangeForPortraitConsole()
+    {
+        try {
+            // Find the SurfaceView (SDL creates it as first child of mLayout)
+            if (mLayout.getChildCount() > 0) {
+                mSurfaceView = mLayout.getChildAt(0);
+
+                // Remove all children for re-arrangement
+                mLayout.removeAllViews();
+
+                // Create a container for the game viewport at native ratio
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                // VX Ace native resolution: 544x416 (4:3)
+                int gameHeight = (int) (screenWidth * 416.0 / 544.0);
+
+                FrameLayout viewportContainer = new FrameLayout(this);
+                viewportContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                    LayoutParams.MATCH_PARENT,
+                    gameHeight
+                ));
+                viewportContainer.setBackgroundColor(Color.rgb(0, 0, 0));
+
+                // Put the surface in the viewport container
+                mSurfaceView.setLayoutParams(new FrameLayout.LayoutParams(
+                    LayoutParams.MATCH_PARENT,
+                    LayoutParams.MATCH_PARENT
+                ));
+                viewportContainer.addView(mSurfaceView);
+                mLayout.addView(viewportContainer);
+
+                // Create a container for the gamepad below
+                mGamepadContainer = new FrameLayout(this);
+                mGamepadContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                    LayoutParams.MATCH_PARENT,
+                    0,
+                    1.0f // Fill remaining space
+                ));
+                mGamepadContainer.setBackgroundColor(Color.rgb(12, 11, 14));
+                mLayout.addView(mGamepadContainer);
+
+                // Move the gamepad layout into the container
+                View gamepadLayout = null;
+                for (int i = 0; i < mGamepadContainer.getChildCount(); i++) {
+                    // After attachTo, gamepad_layout might be here
+                }
+                // The gamepad was already attached to mLayout before our rearrange.
+                // Find it by searching through mLayout's original children.
+                // We need to find the gamepad_layout ViewGroup.
+                // Actually, the gamepad attachTo added it to mLayout. Now that
+                // we cleared mLayout, we need to find where it went.
+                // Let's search the view hierarchy.
+                gamepadLayout = findViewByTagOrId(null, R.id.gamepad_layout);
+                if (gamepadLayout == null) {
+                    // Fallback: the gamepad might have been already removed.
+                    // Re-attach it to the new container.
+                    mGamepad.attachTo(this, mGamepadContainer);
+                } else if (gamepadLayout.getParent() instanceof ViewGroup) {
+                    ((ViewGroup) gamepadLayout.getParent()).removeView(gamepadLayout);
+                    gamepadLayout.setLayoutParams(new FrameLayout.LayoutParams(
+                        LayoutParams.MATCH_PARENT,
+                        LayoutParams.MATCH_PARENT
+                    ));
+                    mGamepadContainer.addView(gamepadLayout);
+                }
+
+                Log.i(TAG, "Portrait console layout: " + screenWidth + "x" + gameHeight + " viewport");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to rearrange for portrait console: " + e.getMessage());
+        }
+    }
+
+    /** Find a view by resource ID in the entire view tree. */
+    private View findViewByTagOrId(ViewGroup root, int id)
+    {
+        ViewGroup searchRoot = root != null ? root : (ViewGroup) getWindow().getDecorView();
+        return searchRoot.findViewById(id);
+    }
+
     @Override
     protected void onStart()
     {
         super.onStart();
 
         if (!mStarted) {
-            // Check for main OBB file
+            if (!GAME_PATH_DEFAULT.equals(GAME_PATH)) {
+                Log.v(TAG, "Intent game path supplied, starting without OBB mount");
+                runSDLThread();
+                return;
+            }
+
             if (new File(OBB_MAIN_FILENAME).exists()) {
                 Log.v(TAG, "Main OBB file found, starting with main OBB mount");
-
-                // Try to mount main OBB file
                 mStorageManager.mountObb(OBB_MAIN_FILENAME, null, obbListener);
             } else {
                 Log.v(TAG, "Main OBB file not found, starting without main OBB mount");
-
-                // Run from default game directory
                 runSDLThread();
             }
         } else {
-            // onStart: Resume SDL thread
             runSDLThread();
         }
     }
@@ -198,10 +350,6 @@ public class MainActivity extends SDLActivity
     protected void onDestroy()
     {
         super.onDestroy();
-
-        // HACK: Exiting the JVM (process) since Ruby does not likes when we
-        // trying to re-initialize Ruby VM in mkxp-z (JNI native library)
-        // that leads to segmentation fault, even we have cleanup the Ruby VM.
         System.exit(0);
     }
 
@@ -215,7 +363,6 @@ public class MainActivity extends SDLActivity
             evt.getKeyCode() != KeyEvent.KEYCODE_VOLUME_MUTE && 
             evt.getKeyCode() != KeyEvent.KEYCODE_HEADSETHOOK
         ) {
-            // Hide gamepad view on key events when visible
             if (!mGamepadInvisible) {
                 mGamepad.hideView();
                 mGamepadInvisible = true;
@@ -231,7 +378,6 @@ public class MainActivity extends SDLActivity
     @Override
     public boolean dispatchTouchEvent(MotionEvent evt)
     {
-        // Show gamepad view on touch when hidden
         if (mGamepadInvisible) {
             mGamepad.showView();
             mGamepadInvisible = false;
@@ -249,31 +395,18 @@ public class MainActivity extends SDLActivity
         return super.onGenericMotionEvent(evt);
     }
 
-    /**
-     * This method is for arguments for launching native mkxp-z.
-     * 
-     * @return arguments for the mkxp-z
-     */
     @Override
     protected String[] getArguments()
     {
         String[] args;
-
         if (DEBUG) {
-            // Arguments in Debug mode
             args = new String[] { "debug" };
         } else {
-            // Arguments in normal mode
             args = new String[] {};
         }
-
         return args;
     }
 
-    /**
-     * This static method is used in native mkxp-z. (see eventthread.cpp)
-     * This method updates text with given FPS count to FPS TextView in Activity.
-     */
     @SuppressLint("SetTextI18n")
     @SuppressWarnings("unused")
     private static void updateFPSText(int num)
@@ -281,10 +414,6 @@ public class MainActivity extends SDLActivity
         mMainHandler.post(() -> tvFps.setText(num + " FPS"));
     }
 
-    /**
-     * This static method is used in native mkxp-z. (see eventthread.cpp)
-     * This method sets the visibility of FPS TextView in Activity.
-     */
     @SuppressWarnings("unused")
     private static void setFPSVisibility(boolean visible)
     {
@@ -296,43 +425,24 @@ public class MainActivity extends SDLActivity
         });
     }
 
-    /**
-     * This static method is used in native mkxp-z. (see systemImpl.cpp)
-     * This method returns a string of current device locale tag. (e.g. "en_US")
-     * 
-     * @return string of locale tag
-     */
     @SuppressWarnings("unused")
     private static String getSystemLanguage()
     {
         return Locale.getDefault().toString();
     }
 
-    /**
-     * This static method is used in native mkxp-z. (see android-binding.cpp)
-     * This method returns a boolean indicating that the device has a vibrator or not.
-     * 
-     * @return boolean
-     */
     @SuppressWarnings("unused")
     private static boolean hasVibrator()
     {
         return mVibrator.hasVibrator();
     }
 
-    /**
-     * This static method is used in native mkxp-z. (see android-binding.cpp)
-     * This method makes device vibrating with given milliseconds duration.
-     * 
-     * @param duration milliseconds duration of vibration
-     */
     @SuppressWarnings("unused")
     private static void vibrate(int duration)
     {
         if (duration >= 10000) {
             duration = 10000;
         }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             mVibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.EFFECT_HEAVY_CLICK));
         } else {
@@ -340,24 +450,12 @@ public class MainActivity extends SDLActivity
         }
     }
 
-    /**
-     * This static method is used in native mkxp-z. (see android-binding.cpp)
-     * This method turns off the current device vibration.
-     */
     @SuppressWarnings("unused")
     private static void vibrateStop()
     {
         mVibrator.cancel();
     }
 
-    /**
-     * This static method is used in native mkxp-z. (see android-binding.cpp)
-     * This method returns a boolean indicating the app is in multi window mode or not.
-     * (Multi-window mode supports from Android 7.0 Nougat (API 24) and higher.)
-     * 
-     * @param activity current MainActivity instance
-     * @return boolean
-     */
     @SuppressWarnings("unused")
     private static boolean inMultiWindow(Activity activity)
     {

@@ -10,7 +10,7 @@ import android.view.MotionEvent;
 import android.view.animation.AlphaAnimation;
 import android.widget.RelativeLayout;
 
-import com.hatkid.mkxpz.R;
+import com.grimmobile.runner.R;
 import com.hatkid.mkxpz.utils.ViewUtils;
 
 public class Gamepad

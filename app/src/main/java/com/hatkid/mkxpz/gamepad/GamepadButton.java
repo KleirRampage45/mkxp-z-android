@@ -13,7 +13,7 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.widget.ImageView;
 
-import com.hatkid.mkxpz.R;
+import com.grimmobile.runner.R;
 
 public class GamepadButton extends ImageView
 {
