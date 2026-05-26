@@ -229,6 +229,20 @@ public class MainActivity extends SDLActivity
         }
     }
 
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint)
+    {
+        if (mIsPortraitConsole) {
+            Log.i(TAG, "Ignoring SDL orientation request in portrait console: width=" + w
+                + " height=" + h
+                + " resizable=" + resizable
+                + " hint=" + hint);
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            return;
+        }
+        super.setOrientationBis(w, h, resizable, hint);
+    }
+
     private GamepadConfig buildGamepadConfig()
     {
         Intent intent = getIntent();
