@@ -328,7 +328,7 @@ public class MainActivity extends SDLActivity
         mPortraitControls = new TouchOverlayView(this);
         mPortraitControls.setControlsOnly(true);
         mPortraitControls.setOpacity(Math.max(0.15f, Math.min(1.0f, mGamepadConfig.opacity / 100f)));
-        mPortraitControls.setScale(Math.max(0.75f, Math.min(1.35f, mGamepadConfig.scale / 100f)));
+        mPortraitControls.setScale(Math.max(1.18f, Math.min(1.55f, mGamepadConfig.scale / 100f)));
         mPortraitControls.setHapticsEnabled(getIntent().getBooleanExtra(EXTRA_HAPTICS_ENABLED, true));
         mPortraitControls.setOnInput((zone, pressed) -> {
             int keyCode = keyCodeForZone(zone);
