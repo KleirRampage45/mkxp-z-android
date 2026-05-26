@@ -150,6 +150,15 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             }
         }
 
+        // Grimmobile portrait-console mode intentionally embeds a landscape-ish
+        // game viewport inside a portrait activity, with touch controls below.
+        // Upstream SDL's orientation guard treats that as a bad rotated surface
+        // and never marks it ready, which leaves the game black.
+        if (skip && requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT && height < (nDeviceHeight * 0.75f)) {
+           Log.i("SDL", "Don't skip embedded portrait-console viewport.");
+           skip = false;
+        }
+
         // Special Patch for Square Resolution: Black Berry Passport
         if (skip) {
            double min = Math.min(mWidth, mHeight);
