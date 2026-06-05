@@ -161,7 +161,7 @@ public class MainActivity extends SDLActivity
 
         try {
             ActivityInfo actInfo = getPackageManager().getActivityInfo(this.getComponentName(), PackageManager.GET_META_DATA);
-            DEBUG = actInfo.metaData.getBoolean("mkxp_debug");
+            DEBUG = actInfo.metaData != null && actInfo.metaData.getBoolean("mkxp_debug", false);
         } catch (PackageManager.NameNotFoundException e) {
             Log.w(TAG, "Failed to set debug flag: " + e);
             e.printStackTrace();
