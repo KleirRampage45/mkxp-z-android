@@ -50,8 +50,12 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.runestone.app.input.RunestoneKeyboardView;
+
 import java.util.Hashtable;
 import java.util.Locale;
+
+import kotlin.Unit;
 
 
 /**
@@ -1284,10 +1288,69 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             mTextEdit.setVisibility(View.VISIBLE);
             mTextEdit.requestFocus();
 
-            InputMethodManager imm = (InputMethodManager) SDL.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-            imm.showSoftInput(mTextEdit, 0);
+            RunestoneKeyboardView keyboard = RunestoneKeyboardView.attachTo(mLayout);
+            keyboard.setOnText(text -> {
+                sendRunestoneKeyboardText(text);
+                return Unit.INSTANCE;
+            });
+            keyboard.setOnKeyCode(keyCode -> {
+                sendRunestoneKeyboardKey(keyCode);
+                return Unit.INSTANCE;
+            });
+            keyboard.setOnHide(() -> {
+                mLayout.removeView(keyboard);
+                mScreenKeyboardShown = false;
+                if (mSurface != null) {
+                    mSurface.requestFocus();
+                }
+                return Unit.INSTANCE;
+            });
 
             mScreenKeyboardShown = true;
+        }
+
+        private static void sendRunestoneKeyboardText(String text) {
+            if (text == null || text.isEmpty()) return;
+            for (int offset = 0; offset < text.length(); ) {
+                int codePoint = text.codePointAt(offset);
+                if (codePoint < 128) {
+                    SDLInputConnection.nativeGenerateScancodeForUnichar((char) codePoint);
+                    int keyCode = keyCodeForChar(codePoint);
+                    if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                        SDLActivity.onNativeKeyDown(keyCode);
+                        SDLActivity.onNativeKeyUp(keyCode);
+                    }
+                }
+                offset += Character.charCount(codePoint);
+            }
+            SDLInputConnection.nativeCommitText(text, 1);
+        }
+
+        private static void sendRunestoneKeyboardKey(int keyCode) {
+            if (keyCode == KeyEvent.KEYCODE_DEL) {
+                SDLInputConnection.nativeGenerateScancodeForUnichar('\b');
+            }
+            SDLActivity.onNativeKeyDown(keyCode);
+            SDLActivity.onNativeKeyUp(keyCode);
+            if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                SDLActivity.onNativeSoftReturnKey();
+            }
+        }
+
+        private static int keyCodeForChar(int codePoint) {
+            if (codePoint >= 'a' && codePoint <= 'z') {
+                return KeyEvent.KEYCODE_A + (codePoint - 'a');
+            }
+            if (codePoint >= 'A' && codePoint <= 'Z') {
+                return KeyEvent.KEYCODE_A + (codePoint - 'A');
+            }
+            if (codePoint >= '0' && codePoint <= '9') {
+                return KeyEvent.KEYCODE_0 + (codePoint - '0');
+            }
+            if (codePoint == ' ') {
+                return KeyEvent.KEYCODE_SPACE;
+            }
+            return KeyEvent.KEYCODE_UNKNOWN;
         }
     }
 
