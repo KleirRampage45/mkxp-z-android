@@ -279,13 +279,14 @@ public class MainActivity extends SDLActivity
                 DisplayMetrics metrics = getResources().getDisplayMetrics();
                 int screenWidth = metrics.widthPixels;
                 int screenHeight = metrics.heightPixels;
-                // Keep the game in the upper band. The surface itself scales
-                // the game's native aspect ratio; this container should not
-                // shrink just because VX Ace is 544x416.
-                int gameHeight = (int) (screenHeight * 0.62f);
-                int minGameHeight = (int) (screenHeight * 0.52f);
-                int maxGameHeight = (int) (screenHeight * 0.68f);
-                gameHeight = Math.max(minGameHeight, Math.min(gameHeight, maxGameHeight));
+                // DisplayMetrics can briefly report landscape dimensions while
+                // SDL is creating the surface. Base the viewport on the portrait
+                // width, then preserve the native VX Ace 544x416 aspect.
+                int portraitWidth = Math.min(screenWidth, screenHeight);
+                int portraitHeight = Math.max(screenWidth, screenHeight);
+                screenWidth = portraitWidth;
+                screenHeight = portraitHeight;
+                int gameHeight = (int) Math.round(screenWidth * 416.0 / 544.0);
 
                 FrameLayout viewportContainer = new FrameLayout(this);
                 int viewportId = View.generateViewId();
