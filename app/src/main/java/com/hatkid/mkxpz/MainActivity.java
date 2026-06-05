@@ -29,6 +29,8 @@ import android.util.Log;
 import android.util.DisplayMetrics;
 import java.util.Locale;
 import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.libsdl.app.SDLActivity;
 import com.runestone.app.input.TouchOverlayView;
@@ -54,11 +56,13 @@ public class MainActivity extends SDLActivity
     public static final String EXTRA_HAPTIC_INTENSITY = "com.runestone.app.extra.HAPTIC_INTENSITY";
     public static final String EXTRA_TEXT_SCALE      = "com.runestone.app.extra.TEXT_SCALE";
     public static final String EXTRA_INTEGER_SCALING = "com.runestone.app.extra.INTEGER_SCALING";
+    public static final String EXTRA_DISPLAY_CUTOUT_MODE = "com.runestone.app.extra.DISPLAY_CUTOUT_MODE";
 
     // Layout modes (match RunnerSettings.LayoutMode)
     private static final String MODE_LANDSCAPE      = "LANDSCAPE";
     private static final String MODE_PORTRAIT_CONSOLE = "PORTRAIT_CONSOLE";
     private static final String MODE_GAMEPAD        = "GAMEPAD";
+    private static final String CUTOUT_EDGE_TO_EDGE = "EDGE_TO_EDGE";
 
     protected boolean mStarted = false;
 
@@ -75,6 +79,8 @@ public class MainActivity extends SDLActivity
 
     // Layout mode from launcher
     private String mLayoutMode = MODE_LANDSCAPE;
+    private String mDisplayCutoutMode = "SAFE_AREA";
+    private final Set<Integer> mPressedControllerKeys = new HashSet<>();
 
     // For portrait console split layout
     private FrameLayout mGamepadContainer;
@@ -221,7 +227,9 @@ public class MainActivity extends SDLActivity
         }
         if (Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams params = getWindow().getAttributes();
-            params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            params.layoutInDisplayCutoutMode = CUTOUT_EDGE_TO_EDGE.equals(mDisplayCutoutMode)
+                    ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
             getWindow().setAttributes(params);
         }
     }
@@ -247,6 +255,8 @@ public class MainActivity extends SDLActivity
         Intent intent = getIntent();
         mLayoutMode = intent.getStringExtra(EXTRA_LAYOUT_MODE);
         if (mLayoutMode == null) mLayoutMode = MODE_LANDSCAPE;
+        mDisplayCutoutMode = intent.getStringExtra(EXTRA_DISPLAY_CUTOUT_MODE);
+        if (mDisplayCutoutMode == null) mDisplayCutoutMode = "SAFE_AREA";
         mIsPortraitConsole = MODE_PORTRAIT_CONSOLE.equals(mLayoutMode);
         Log.i(TAG, "Launcher settings: layout=" + mLayoutMode
             + " touchOpacity=" + intent.getFloatExtra(EXTRA_TOUCH_OPACITY, 0.72f)
@@ -254,7 +264,8 @@ public class MainActivity extends SDLActivity
             + " haptics=" + intent.getBooleanExtra(EXTRA_HAPTICS_ENABLED, true)
             + " hapticIntensity=" + intent.getFloatExtra(EXTRA_HAPTIC_INTENSITY, 0.55f)
             + " textScale=" + intent.getFloatExtra(EXTRA_TEXT_SCALE, 1.0f)
-            + " integerScaling=" + intent.getBooleanExtra(EXTRA_INTEGER_SCALING, false));
+            + " integerScaling=" + intent.getBooleanExtra(EXTRA_INTEGER_SCALING, false)
+            + " cutout=" + mDisplayCutoutMode);
     }
 
     private void applyOrientation()
@@ -468,6 +479,10 @@ public class MainActivity extends SDLActivity
     @Override
     public boolean dispatchKeyEvent(KeyEvent evt)
     {
+        if (handleControllerCombo(evt)) {
+            return true;
+        }
+
         if (
             evt.getKeyCode() != KeyEvent.KEYCODE_BACK &&
             evt.getKeyCode() != KeyEvent.KEYCODE_VOLUME_UP &&
@@ -485,6 +500,38 @@ public class MainActivity extends SDLActivity
             return true;
 
         return super.dispatchKeyEvent(evt);
+    }
+
+    private boolean handleControllerCombo(KeyEvent evt)
+    {
+        if (evt.getAction() == KeyEvent.ACTION_UP) {
+            mPressedControllerKeys.remove(evt.getKeyCode());
+            return false;
+        }
+        if (evt.getAction() != KeyEvent.ACTION_DOWN) return false;
+        mPressedControllerKeys.add(evt.getKeyCode());
+        if (evt.getRepeatCount() > 0) return false;
+
+        if (
+            mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_L2) &&
+            mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_R2)
+        ) {
+            goHomePaused();
+            return true;
+        }
+        return false;
+    }
+
+    private void goHomePaused()
+    {
+        getSharedPreferences("runestone", MODE_PRIVATE).edit()
+            .putBoolean("game_minimized", true)
+            .putString("paused_game", GAME_PATH)
+            .apply();
+        Intent intent = new Intent();
+        intent.setClassName(getPackageName(), "com.runestone.app.MainActivity");
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
     }
 
     @Override
