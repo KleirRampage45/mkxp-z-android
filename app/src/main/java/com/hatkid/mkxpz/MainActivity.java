@@ -279,12 +279,13 @@ public class MainActivity extends SDLActivity
                 DisplayMetrics metrics = getResources().getDisplayMetrics();
                 int screenWidth = metrics.widthPixels;
                 int screenHeight = metrics.heightPixels;
-                // VX Ace native resolution: 544x416 (4:3)
-                int gameHeight = (int) (screenWidth * 416.0 / 544.0);
-                int maxGameHeight = (int) (screenHeight * 0.55f);
-                if (maxGameHeight > 0) {
-                    gameHeight = Math.min(gameHeight, maxGameHeight);
-                }
+                // Keep the game in the upper band. The surface itself scales
+                // the game's native aspect ratio; this container should not
+                // shrink just because VX Ace is 544x416.
+                int gameHeight = (int) (screenHeight * 0.62f);
+                int minGameHeight = (int) (screenHeight * 0.52f);
+                int maxGameHeight = (int) (screenHeight * 0.68f);
+                gameHeight = Math.max(minGameHeight, Math.min(gameHeight, maxGameHeight));
 
                 FrameLayout viewportContainer = new FrameLayout(this);
                 int viewportId = View.generateViewId();
@@ -339,6 +340,12 @@ public class MainActivity extends SDLActivity
             Math.max(0.0f, Math.min(1.0f, getIntent().getFloatExtra(EXTRA_HAPTIC_INTENSITY, 0.55f)))
         );
         mPortraitControls.setOnInput((zone, pressed) -> {
+            if (zone == TouchOverlayView.Zone.HOME) {
+                if (!pressed) {
+                    finish();
+                }
+                return Unit.INSTANCE;
+            }
             int keyCode = keyCodeForZone(zone);
             if (keyCode != 0) {
                 if (pressed) {
@@ -379,6 +386,10 @@ public class MainActivity extends SDLActivity
                 return mGamepadConfig.keycodeY;
             case SELECT:
                 return mGamepadConfig.keycodeSHIFT;
+            case SETTINGS:
+                return 0;
+            case HOME:
+                return 0;
             default:
                 return 0;
         }
