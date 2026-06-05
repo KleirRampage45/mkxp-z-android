@@ -57,6 +57,7 @@ public class MainActivity extends SDLActivity
     public static final String EXTRA_TEXT_SCALE      = "com.runestone.app.extra.TEXT_SCALE";
     public static final String EXTRA_INTEGER_SCALING = "com.runestone.app.extra.INTEGER_SCALING";
     public static final String EXTRA_DISPLAY_CUTOUT_MODE = "com.runestone.app.extra.DISPLAY_CUTOUT_MODE";
+    public static final String EXTRA_CONTROLLER_HOME_SHORTCUT = "com.runestone.app.extra.CONTROLLER_HOME_SHORTCUT";
 
     // Layout modes (match RunnerSettings.LayoutMode)
     private static final String MODE_LANDSCAPE      = "LANDSCAPE";
@@ -80,7 +81,9 @@ public class MainActivity extends SDLActivity
     // Layout mode from launcher
     private String mLayoutMode = MODE_LANDSCAPE;
     private String mDisplayCutoutMode = "SAFE_AREA";
+    private String mControllerHomeShortcut = "L2_R2";
     private final Set<Integer> mPressedControllerKeys = new HashSet<>();
+    private boolean mTriggerHomeComboDown = false;
 
     // For portrait console split layout
     private FrameLayout mGamepadContainer;
@@ -257,6 +260,8 @@ public class MainActivity extends SDLActivity
         if (mLayoutMode == null) mLayoutMode = MODE_LANDSCAPE;
         mDisplayCutoutMode = intent.getStringExtra(EXTRA_DISPLAY_CUTOUT_MODE);
         if (mDisplayCutoutMode == null) mDisplayCutoutMode = "SAFE_AREA";
+        mControllerHomeShortcut = intent.getStringExtra(EXTRA_CONTROLLER_HOME_SHORTCUT);
+        if (mControllerHomeShortcut == null) mControllerHomeShortcut = "L2_R2";
         mIsPortraitConsole = MODE_PORTRAIT_CONSOLE.equals(mLayoutMode);
         Log.i(TAG, "Launcher settings: layout=" + mLayoutMode
             + " touchOpacity=" + intent.getFloatExtra(EXTRA_TOUCH_OPACITY, 0.72f)
@@ -265,7 +270,8 @@ public class MainActivity extends SDLActivity
             + " hapticIntensity=" + intent.getFloatExtra(EXTRA_HAPTIC_INTENSITY, 0.55f)
             + " textScale=" + intent.getFloatExtra(EXTRA_TEXT_SCALE, 1.0f)
             + " integerScaling=" + intent.getBooleanExtra(EXTRA_INTEGER_SCALING, false)
-            + " cutout=" + mDisplayCutoutMode);
+            + " cutout=" + mDisplayCutoutMode
+            + " homeShortcut=" + mControllerHomeShortcut);
     }
 
     private void applyOrientation()
@@ -512,14 +518,62 @@ public class MainActivity extends SDLActivity
         mPressedControllerKeys.add(evt.getKeyCode());
         if (evt.getRepeatCount() > 0) return false;
 
-        if (
-            mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_L2) &&
-            mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_R2)
-        ) {
+        if (shortcutPressed(mControllerHomeShortcut)) {
             goHomePaused();
             return true;
         }
         return false;
+    }
+
+    private boolean shortcutPressed(String shortcut)
+    {
+        if ("OFF".equals(shortcut)) return false;
+        if ("L2_R2".equals(shortcut)) {
+            return mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_L2)
+                && mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_R2);
+        }
+        if ("L1_R1".equals(shortcut)) {
+            return mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_L1)
+                && mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_R1);
+        }
+        if ("START_SELECT".equals(shortcut)) {
+            return mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_START)
+                && mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_SELECT);
+        }
+        if ("L2_START".equals(shortcut)) {
+            return mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_L2)
+                && mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_START);
+        }
+        if ("R2_START".equals(shortcut)) {
+            return mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_R2)
+                && mPressedControllerKeys.contains(KeyEvent.KEYCODE_BUTTON_START);
+        }
+        return false;
+    }
+
+    private boolean handleTriggerHomeCombo(MotionEvent evt)
+    {
+        if (!"L2_R2".equals(mControllerHomeShortcut)) {
+            mTriggerHomeComboDown = false;
+            return false;
+        }
+        float left = Math.max(
+            evt.getAxisValue(MotionEvent.AXIS_LTRIGGER),
+            evt.getAxisValue(MotionEvent.AXIS_BRAKE)
+        );
+        float right = Math.max(
+            evt.getAxisValue(MotionEvent.AXIS_RTRIGGER),
+            evt.getAxisValue(MotionEvent.AXIS_GAS)
+        );
+        boolean bothPressed = left > 0.55f && right > 0.55f;
+        if (!bothPressed) {
+            mTriggerHomeComboDown = false;
+            return false;
+        }
+        if (mTriggerHomeComboDown) return true;
+        mTriggerHomeComboDown = true;
+        goHomePaused();
+        return true;
     }
 
     private void goHomePaused()
@@ -548,6 +602,9 @@ public class MainActivity extends SDLActivity
     @Override
     public boolean onGenericMotionEvent(MotionEvent evt)
     {
+        if (handleTriggerHomeCombo(evt))
+            return true;
+
         if (mGamepad.processDPadEvent(evt))
             return true;
 

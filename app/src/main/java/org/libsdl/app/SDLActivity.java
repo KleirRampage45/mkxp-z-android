@@ -216,6 +216,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     protected static SDLSurface mSurface;
     protected static DummyEdit mTextEdit;
     protected static boolean mScreenKeyboardShown;
+    protected static RunestoneKeyboardView mRunestoneKeyboard;
     protected static ViewGroup mLayout;
     protected static SDLClipboardHandler mClipboardHandler;
     protected static Hashtable<Integer, PointerIcon> mCursors;
@@ -679,7 +680,30 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             ) {
             return false;
         }
+        if (mScreenKeyboardShown && mRunestoneKeyboard != null && isControllerKeyEvent(event)) {
+            return mRunestoneKeyboard.handleControllerKey(event);
+        }
         return super.dispatchKeyEvent(event);
+    }
+
+    private static boolean isControllerKeyEvent(KeyEvent event) {
+        int source = event.getSource();
+        int controllerSources = InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD;
+        if ((source & controllerSources) != 0) return true;
+        switch (event.getKeyCode()) {
+            case KeyEvent.KEYCODE_BUTTON_A:
+            case KeyEvent.KEYCODE_BUTTON_B:
+            case KeyEvent.KEYCODE_BUTTON_X:
+            case KeyEvent.KEYCODE_BUTTON_Y:
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+                return true;
+            default:
+                return false;
+        }
     }
 
     /* Transition to next state */
@@ -1289,6 +1313,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             mTextEdit.requestFocus();
 
             RunestoneKeyboardView keyboard = RunestoneKeyboardView.attachTo(mLayout);
+            mRunestoneKeyboard = keyboard;
             keyboard.setOnText(text -> {
                 sendRunestoneKeyboardText(text);
                 return Unit.INSTANCE;
@@ -1299,6 +1324,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             });
             keyboard.setOnHide(() -> {
                 mLayout.removeView(keyboard);
+                mRunestoneKeyboard = null;
                 mScreenKeyboardShown = false;
                 if (mSurface != null) {
                     mSurface.requestFocus();
