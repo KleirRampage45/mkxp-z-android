@@ -1281,6 +1281,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                 mTextEdit.setLayoutParams(params);
             }
 
+            mTextEdit.resetInputState();
             mTextEdit.setVisibility(View.VISIBLE);
             mTextEdit.requestFocus();
 
@@ -1938,6 +1939,12 @@ class DummyEdit extends View implements View.OnKeyListener {
         return super.onKeyPreIme(keyCode, event);
     }
 
+    public void resetInputState() {
+        if (ic instanceof SDLInputConnection) {
+            ((SDLInputConnection) ic).resetTextState();
+        }
+    }
+
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
         ic = new SDLInputConnection(this, true);
@@ -1959,6 +1966,11 @@ class SDLInputConnection extends BaseInputConnection {
     public SDLInputConnection(View targetView, boolean fullEditor) {
         super(targetView, fullEditor);
         mEditText = new EditText(SDL.getContext());
+    }
+
+    public void resetTextState() {
+        getEditable().clear();
+        mCommittedText = "";
     }
 
     @Override
@@ -1984,6 +1996,16 @@ class SDLInputConnection extends BaseInputConnection {
             if (SDLActivity.onNativeSoftReturnKey()) {
                 return true;
             }
+        }
+
+        if (event.getKeyCode() == KeyEvent.KEYCODE_DEL ||
+            event.getKeyCode() == KeyEvent.KEYCODE_FORWARD_DEL) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                SDLActivity.onNativeKeyDown(event.getKeyCode());
+            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                SDLActivity.onNativeKeyUp(event.getKeyCode());
+            }
+            return true;
         }
 
         return super.sendKeyEvent(event);
@@ -2038,6 +2060,8 @@ class SDLInputConnection extends BaseInputConnection {
         for (offset = matchLength; offset < mCommittedText.length(); ) {
             int codePoint = mCommittedText.codePointAt(offset);
             nativeGenerateScancodeForUnichar('\b');
+            SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_DEL);
+            SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_DEL);
             offset += Character.charCount(codePoint);
         }
 
