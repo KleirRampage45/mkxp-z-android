@@ -30,29 +30,29 @@ import java.util.Locale;
 import java.io.File;
 
 import org.libsdl.app.SDLActivity;
-import com.grimmobile.runner.input.TouchOverlayView;
+import com.runestone.app.input.TouchOverlayView;
 import com.hatkid.mkxpz.gamepad.Gamepad;
 import com.hatkid.mkxpz.gamepad.GamepadConfig;
-import com.grimmobile.runner.R;
+import com.runestone.app.R;
 import kotlin.Unit;
 
 public class MainActivity extends SDLActivity
 {
     private static final String TAG = "mkxp-z[Activity]";
-    public static final String EXTRA_GAME_PATH = "com.grimmobile.runner.extra.GAME_PATH";
+    public static final String EXTRA_GAME_PATH = "com.runestone.app.extra.GAME_PATH";
     private static final String GAME_PATH_DEFAULT = Environment.getExternalStorageDirectory() + "/mkxp-z";
     private static String GAME_PATH = GAME_PATH_DEFAULT;
     private static String OBB_MAIN_FILENAME;
     private static boolean DEBUG = false;
 
-    // Settings extras (from Grimmobile launcher)
-    public static final String EXTRA_LAYOUT_MODE     = "com.grimmobile.runner.extra.LAYOUT_MODE";
-    public static final String EXTRA_TOUCH_OPACITY   = "com.grimmobile.runner.extra.TOUCH_OPACITY";
-    public static final String EXTRA_TOUCH_SCALE     = "com.grimmobile.runner.extra.TOUCH_SCALE";
-    public static final String EXTRA_HAPTICS_ENABLED = "com.grimmobile.runner.extra.HAPTICS_ENABLED";
-    public static final String EXTRA_HAPTIC_INTENSITY = "com.grimmobile.runner.extra.HAPTIC_INTENSITY";
-    public static final String EXTRA_TEXT_SCALE      = "com.grimmobile.runner.extra.TEXT_SCALE";
-    public static final String EXTRA_INTEGER_SCALING = "com.grimmobile.runner.extra.INTEGER_SCALING";
+    // Settings extras from the Runestone launcher.
+    public static final String EXTRA_LAYOUT_MODE     = "com.runestone.app.extra.LAYOUT_MODE";
+    public static final String EXTRA_TOUCH_OPACITY   = "com.runestone.app.extra.TOUCH_OPACITY";
+    public static final String EXTRA_TOUCH_SCALE     = "com.runestone.app.extra.TOUCH_SCALE";
+    public static final String EXTRA_HAPTICS_ENABLED = "com.runestone.app.extra.HAPTICS_ENABLED";
+    public static final String EXTRA_HAPTIC_INTENSITY = "com.runestone.app.extra.HAPTIC_INTENSITY";
+    public static final String EXTRA_TEXT_SCALE      = "com.runestone.app.extra.TEXT_SCALE";
+    public static final String EXTRA_INTEGER_SCALING = "com.runestone.app.extra.INTEGER_SCALING";
 
     // Layout modes (match RunnerSettings.LayoutMode)
     private static final String MODE_LANDSCAPE      = "LANDSCAPE";
@@ -143,6 +143,9 @@ public class MainActivity extends SDLActivity
         super.onCreate(savedInstanceState);
 
         String requestedGamePath = getIntent().getStringExtra(EXTRA_GAME_PATH);
+        if (requestedGamePath == null || requestedGamePath.isEmpty()) {
+            requestedGamePath = getIntent().getStringExtra("game_path");
+        }
         boolean launchedWithGamePath = requestedGamePath != null && !requestedGamePath.isEmpty();
         if (launchedWithGamePath) {
             GAME_PATH = requestedGamePath;
