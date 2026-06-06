@@ -54,6 +54,7 @@ public class MainActivity extends SDLActivity
     public static final String EXTRA_TOUCH_SCALE     = "com.runestone.app.extra.TOUCH_SCALE";
     public static final String EXTRA_HAPTICS_ENABLED = "com.runestone.app.extra.HAPTICS_ENABLED";
     public static final String EXTRA_HAPTIC_INTENSITY = "com.runestone.app.extra.HAPTIC_INTENSITY";
+    public static final String EXTRA_HIDE_VIRTUAL_GAMEPAD = "com.runestone.app.extra.HIDE_VIRTUAL_GAMEPAD";
     public static final String EXTRA_TEXT_SCALE      = "com.runestone.app.extra.TEXT_SCALE";
     public static final String EXTRA_INTEGER_SCALING = "com.runestone.app.extra.INTEGER_SCALING";
     public static final String EXTRA_DISPLAY_CUTOUT_MODE = "com.runestone.app.extra.DISPLAY_CUTOUT_MODE";
@@ -82,6 +83,7 @@ public class MainActivity extends SDLActivity
     private String mLayoutMode = MODE_LANDSCAPE;
     private String mDisplayCutoutMode = "SAFE_AREA";
     private String mControllerHomeShortcut = "L2_R2";
+    private boolean mHideVirtualGamepad = false;
     private final Set<Integer> mPressedControllerKeys = new HashSet<>();
     private boolean mTriggerHomeComboDown = false;
 
@@ -188,7 +190,7 @@ public class MainActivity extends SDLActivity
         }
 
         // Setup in-screen gamepad
-        mGamepadInvisible = (isAndroidTV() || isChromebook());
+        mGamepadInvisible = mHideVirtualGamepad || isAndroidTV() || isChromebook();
         mGamepadConfig = buildGamepadConfig();
         mGamepad.init(mGamepadConfig, mGamepadInvisible);
         mGamepad.setOnKeyDownListener(SDLActivity::onNativeKeyDown);
@@ -196,7 +198,9 @@ public class MainActivity extends SDLActivity
 
         // Attach gamepad after the target layout exists. Portrait mode needs a
         // dedicated lower panel; landscape keeps the upstream overlay behavior.
-        if (mIsPortraitConsole && mLayout != null) {
+        if (mHideVirtualGamepad) {
+            Log.i(TAG, "Virtual gamepad hidden by launcher setting");
+        } else if (mIsPortraitConsole && mLayout != null) {
             rearrangeForPortraitConsole();
         } else if (mLayout != null) {
             mGamepad.attachTo(this, mLayout);
@@ -262,6 +266,7 @@ public class MainActivity extends SDLActivity
         if (mDisplayCutoutMode == null) mDisplayCutoutMode = "SAFE_AREA";
         mControllerHomeShortcut = intent.getStringExtra(EXTRA_CONTROLLER_HOME_SHORTCUT);
         if (mControllerHomeShortcut == null) mControllerHomeShortcut = "L2_R2";
+        mHideVirtualGamepad = intent.getBooleanExtra(EXTRA_HIDE_VIRTUAL_GAMEPAD, false);
         mIsPortraitConsole = MODE_PORTRAIT_CONSOLE.equals(mLayoutMode);
         Log.i(TAG, "Launcher settings: layout=" + mLayoutMode
             + " touchOpacity=" + intent.getFloatExtra(EXTRA_TOUCH_OPACITY, 0.72f)
@@ -270,6 +275,7 @@ public class MainActivity extends SDLActivity
             + " hapticIntensity=" + intent.getFloatExtra(EXTRA_HAPTIC_INTENSITY, 0.55f)
             + " textScale=" + intent.getFloatExtra(EXTRA_TEXT_SCALE, 1.0f)
             + " integerScaling=" + intent.getBooleanExtra(EXTRA_INTEGER_SCALING, false)
+            + " hideVirtualGamepad=" + mHideVirtualGamepad
             + " cutout=" + mDisplayCutoutMode
             + " homeShortcut=" + mControllerHomeShortcut);
     }
