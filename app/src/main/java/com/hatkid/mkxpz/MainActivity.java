@@ -482,16 +482,10 @@ public class MainActivity extends SDLActivity
             dismissRuntimeActions();
         }));
 
-        LinearLayout actionRow = new LinearLayout(this);
-        actionRow.setOrientation(LinearLayout.HORIZONTAL);
-        actionRow.addView(runtimeButton("LAYOUT", R.drawable.ic_runtime_rotate, v -> {
-            Toast.makeText(this, "Change native layout from game options before launch", Toast.LENGTH_SHORT).show();
-        }), weightedParams(0, dp(6)));
-        actionRow.addView(runtimeButton("KEYBOARD", R.drawable.ic_runtime_keyboard, v -> {
+        panel.addView(runtimeButton("KEYBOARD", R.drawable.ic_runtime_keyboard, v -> {
             dismissRuntimeActions();
             org.libsdl.app.SDLActivity.showTextInput(0, 0, 1, 1);
-        }), weightedParams(dp(6), 0));
-        panel.addView(actionRow);
+        }));
 
         FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
             Math.max(dp(300), Math.min(getResources().getDisplayMetrics().widthPixels / 2, dp(560))),
@@ -590,13 +584,9 @@ public class MainActivity extends SDLActivity
         view.setTextColor(Color.rgb(220, 210, 190));
         view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         view.setGravity(android.view.Gravity.CENTER);
-        view.setPadding(dp(14), dp(7), dp(14), dp(7));
+        view.setPadding(dp(18), dp(10), dp(18), dp(10));
         view.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_runtime_dropdown, 0, 0);
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(Color.argb(185, 12, 11, 16));
-        bg.setStroke(dp(1), Color.argb(70, 160, 140, 110));
-        bg.setCornerRadius(dp(16));
-        view.setBackground(bg);
+        view.setBackground(null);
         return view;
     }
 
