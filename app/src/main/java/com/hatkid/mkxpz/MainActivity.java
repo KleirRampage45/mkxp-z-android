@@ -13,7 +13,9 @@ import android.view.WindowManager;
 import android.view.ViewGroup.LayoutParams;
 import android.widget.TextView;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -91,6 +93,7 @@ public class MainActivity extends SDLActivity
     private FrameLayout mGamepadContainer;
     private TouchOverlayView mPortraitControls;
     private boolean mIsPortraitConsole = false;
+    private View mRuntimeActionsOverlay;
 
     private void runSDLThread()
     {
@@ -217,6 +220,22 @@ public class MainActivity extends SDLActivity
         tvFps.setLayoutParams(params);
 
         mLayout.addView(tvFps);
+        attachRuntimeMenuButton();
+    }
+
+    private void attachRuntimeMenuButton()
+    {
+        if (mLayout == null) return;
+        TextView menu = floatingPill("MENU");
+        menu.setOnClickListener(v -> showRuntimeActions());
+        RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
+            LayoutParams.WRAP_CONTENT,
+            LayoutParams.WRAP_CONTENT
+        );
+        params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        params.addRule(RelativeLayout.CENTER_HORIZONTAL);
+        params.setMargins(0, dp(8), 0, 0);
+        mLayout.addView(menu, params);
     }
 
     private void applyImmersiveMode()
@@ -426,6 +445,180 @@ public class MainActivity extends SDLActivity
         Log.i(TAG, "Portrait controls attached with custom layout view");
     }
 
+    private void showRuntimeActions()
+    {
+        if (mLayout == null) return;
+        if (mRuntimeActionsOverlay != null) {
+            mLayout.removeView(mRuntimeActionsOverlay);
+            mRuntimeActionsOverlay = null;
+            return;
+        }
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.argb(95, 0, 0, 0));
+        overlay.setClickable(true);
+        overlay.setOnClickListener(v -> dismissRuntimeActions());
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(12), dp(10), dp(12), dp(12));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.argb(218, 12, 11, 16));
+        bg.setStroke(dp(1), Color.argb(80, 200, 180, 140));
+        bg.setCornerRadius(dp(14));
+        panel.setBackground(bg);
+        panel.setClickable(true);
+
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.addView(runtimeButton("RESUME", R.drawable.ic_runtime_resume, v -> dismissRuntimeActions()), weightedParams(0, dp(6)));
+        topRow.addView(runtimeButton("HOME", R.drawable.ic_runtime_home, v -> {
+            dismissRuntimeActions();
+            goHomePaused();
+        }), weightedParams(dp(6), 0));
+        panel.addView(topRow);
+
+        panel.addView(runtimeToggleButton(!mHideVirtualGamepad, v -> {
+            toggleNativeControls();
+            dismissRuntimeActions();
+        }));
+
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionRow.addView(runtimeButton(
+            MODE_LANDSCAPE.equals(mLayoutMode) ? "PORTRAIT" : "LANDSCAPE",
+            R.drawable.ic_runtime_rotate,
+            v -> {
+                dismissRuntimeActions();
+                rotateNativeLayout();
+            }
+        ), weightedParams(0, dp(6)));
+        actionRow.addView(runtimeButton("KEYBOARD", R.drawable.ic_runtime_keyboard, v -> {
+            dismissRuntimeActions();
+            org.libsdl.app.SDLActivity.showTextInput(0, 0, 1, 1);
+        }), weightedParams(dp(6), 0));
+        panel.addView(actionRow);
+
+        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
+            Math.max(dp(300), Math.min(getResources().getDisplayMetrics().widthPixels / 2, dp(560))),
+            LayoutParams.WRAP_CONTENT,
+            android.view.Gravity.CENTER
+        );
+        overlay.addView(panel, panelParams);
+        mLayout.addView(overlay, new RelativeLayout.LayoutParams(
+            LayoutParams.MATCH_PARENT,
+            LayoutParams.MATCH_PARENT
+        ));
+        mRuntimeActionsOverlay = overlay;
+    }
+
+    private void dismissRuntimeActions()
+    {
+        if (mRuntimeActionsOverlay != null && mLayout != null) {
+            mLayout.removeView(mRuntimeActionsOverlay);
+            mRuntimeActionsOverlay = null;
+        }
+    }
+
+    private void toggleNativeControls()
+    {
+        mHideVirtualGamepad = !mHideVirtualGamepad;
+        if (mHideVirtualGamepad) {
+            if (mPortraitControls != null && mPortraitControls.getParent() instanceof FrameLayout) {
+                ((FrameLayout) mPortraitControls.getParent()).removeView(mPortraitControls);
+                mPortraitControls = null;
+            }
+            mGamepad.hideView();
+            mGamepadInvisible = true;
+            Toast.makeText(this, "Controls hidden", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (mIsPortraitConsole && mGamepadContainer != null && mPortraitControls == null) {
+            attachPortraitControls();
+        } else {
+            mGamepad.showView();
+            mGamepadInvisible = false;
+        }
+        Toast.makeText(this, "Controls shown", Toast.LENGTH_SHORT).show();
+    }
+
+    private void rotateNativeLayout()
+    {
+        mLayoutMode = MODE_LANDSCAPE.equals(mLayoutMode) ? MODE_PORTRAIT_CONSOLE : MODE_LANDSCAPE;
+        getIntent().putExtra(EXTRA_LAYOUT_MODE, mLayoutMode);
+        Toast.makeText(this, "Relaunching native runtime for layout change", Toast.LENGTH_SHORT).show();
+        Intent intent = getIntent();
+        finish();
+        startActivity(intent);
+    }
+
+    private TextView runtimeButton(String label, int iconRes, View.OnClickListener listener)
+    {
+        TextView view = new TextView(this);
+        view.setText(label);
+        view.setTextColor(Color.rgb(230, 220, 200));
+        view.setTextSize(11);
+        view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        view.setGravity(android.view.Gravity.CENTER);
+        view.setPadding(dp(8), dp(8), dp(8), dp(8));
+        view.setCompoundDrawablesWithIntrinsicBounds(0, iconRes, 0, 0);
+        view.setCompoundDrawablePadding(dp(4));
+        view.setBackground(runtimeButtonBg(false));
+        view.setOnClickListener(listener);
+        return view;
+    }
+
+    private TextView runtimeToggleButton(boolean enabled, View.OnClickListener listener)
+    {
+        TextView view = runtimeButton(enabled ? "CONTROLS ON" : "CONTROLS OFF", R.drawable.ic_runtime_controls, listener);
+        view.setTextColor(enabled ? Color.rgb(245, 228, 190) : Color.rgb(170, 160, 145));
+        view.setBackground(runtimeButtonBg(enabled));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            LayoutParams.MATCH_PARENT,
+            LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, dp(10), 0, dp(10));
+        view.setLayoutParams(params);
+        return view;
+    }
+
+    private android.graphics.drawable.GradientDrawable runtimeButtonBg(boolean enabled)
+    {
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(enabled ? Color.argb(105, 120, 95, 62) : Color.argb(70, 200, 170, 130));
+        bg.setStroke(dp(1), enabled ? Color.argb(120, 225, 195, 140) : Color.argb(85, 210, 185, 145));
+        bg.setCornerRadius(dp(10));
+        return bg;
+    }
+
+    private LinearLayout.LayoutParams weightedParams(int left, int right)
+    {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
+        params.setMargins(left, 0, right, 0);
+        return params;
+    }
+
+    private TextView floatingPill(String label)
+    {
+        TextView view = new TextView(this);
+        view.setText(label);
+        view.setTextSize(11);
+        view.setTextColor(Color.rgb(220, 210, 190));
+        view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        view.setGravity(android.view.Gravity.CENTER);
+        view.setPadding(dp(14), dp(6), dp(14), dp(6));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.argb(185, 12, 11, 16));
+        bg.setStroke(dp(1), Color.argb(70, 160, 140, 110));
+        bg.setCornerRadius(dp(16));
+        view.setBackground(bg);
+        return view;
+    }
+
+    private int dp(int value)
+    {
+        return (int) (value * getResources().getDisplayMetrics().density);
+    }
+
     private int keyCodeForZone(TouchOverlayView.Zone zone)
     {
         switch (zone) {
@@ -597,7 +790,7 @@ public class MainActivity extends SDLActivity
     @Override
     public boolean dispatchTouchEvent(MotionEvent evt)
     {
-        if (mGamepadInvisible) {
+        if (!mHideVirtualGamepad && mGamepadInvisible) {
             mGamepad.showView();
             mGamepadInvisible = false;
         }
