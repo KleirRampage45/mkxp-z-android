@@ -226,7 +226,7 @@ public class MainActivity extends SDLActivity
     private void attachRuntimeMenuButton()
     {
         if (mLayout == null) return;
-        TextView menu = floatingPill("MENU");
+        TextView menu = floatingPill();
         menu.setOnClickListener(v -> showRuntimeActions());
         RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
             LayoutParams.WRAP_CONTENT,
@@ -484,14 +484,9 @@ public class MainActivity extends SDLActivity
 
         LinearLayout actionRow = new LinearLayout(this);
         actionRow.setOrientation(LinearLayout.HORIZONTAL);
-        actionRow.addView(runtimeButton(
-            MODE_LANDSCAPE.equals(mLayoutMode) ? "PORTRAIT" : "LANDSCAPE",
-            R.drawable.ic_runtime_rotate,
-            v -> {
-                dismissRuntimeActions();
-                rotateNativeLayout();
-            }
-        ), weightedParams(0, dp(6)));
+        actionRow.addView(runtimeButton("LAYOUT", R.drawable.ic_runtime_rotate, v -> {
+            Toast.makeText(this, "Change native layout from game options before launch", Toast.LENGTH_SHORT).show();
+        }), weightedParams(0, dp(6)));
         actionRow.addView(runtimeButton("KEYBOARD", R.drawable.ic_runtime_keyboard, v -> {
             dismissRuntimeActions();
             org.libsdl.app.SDLActivity.showTextInput(0, 0, 1, 1);
@@ -541,16 +536,6 @@ public class MainActivity extends SDLActivity
         Toast.makeText(this, "Controls shown", Toast.LENGTH_SHORT).show();
     }
 
-    private void rotateNativeLayout()
-    {
-        mLayoutMode = MODE_LANDSCAPE.equals(mLayoutMode) ? MODE_PORTRAIT_CONSOLE : MODE_LANDSCAPE;
-        getIntent().putExtra(EXTRA_LAYOUT_MODE, mLayoutMode);
-        Toast.makeText(this, "Relaunching native runtime for layout change", Toast.LENGTH_SHORT).show();
-        Intent intent = getIntent();
-        finish();
-        startActivity(intent);
-    }
-
     private TextView runtimeButton(String label, int iconRes, View.OnClickListener listener)
     {
         TextView view = new TextView(this);
@@ -597,15 +582,16 @@ public class MainActivity extends SDLActivity
         return params;
     }
 
-    private TextView floatingPill(String label)
+    private TextView floatingPill()
     {
         TextView view = new TextView(this);
-        view.setText(label);
-        view.setTextSize(11);
+        view.setText("");
+        view.setTextSize(0);
         view.setTextColor(Color.rgb(220, 210, 190));
         view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         view.setGravity(android.view.Gravity.CENTER);
-        view.setPadding(dp(14), dp(6), dp(14), dp(6));
+        view.setPadding(dp(14), dp(7), dp(14), dp(7));
+        view.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_runtime_dropdown, 0, 0);
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(Color.argb(185, 12, 11, 16));
         bg.setStroke(dp(1), Color.argb(70, 160, 140, 110));
