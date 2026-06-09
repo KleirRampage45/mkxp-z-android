@@ -792,6 +792,11 @@ public class MainActivity extends SDLActivity
         String[] args;
         if (DEBUG) {
             args = new String[] { "debug" };
+        } else if (!GAME_PATH_DEFAULT.equals(GAME_PATH) && GAME_PATH != null && !GAME_PATH.isEmpty()) {
+            // mkxp-z uses argv[0] as the game folder — pass GAME_PATH so the
+            // interpreter loads the requested game's Data/, Graphics/, etc.
+            // instead of the default /sdcard/mkxp-z fallback.
+            args = new String[] { GAME_PATH };
         } else {
             args = new String[] {};
         }
