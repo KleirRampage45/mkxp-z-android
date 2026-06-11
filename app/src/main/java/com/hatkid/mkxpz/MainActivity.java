@@ -251,7 +251,7 @@ public class MainActivity extends SDLActivity
         );
         params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         params.addRule(RelativeLayout.CENTER_HORIZONTAL);
-        params.setMargins(0, dp(8), 0, 0);
+        params.setMargins(0, dp(2), 0, 0);
         mLayout.addView(menu, params);
     }
 
@@ -480,18 +480,18 @@ public class MainActivity extends SDLActivity
             return;
         }
         FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(Color.argb(75, 0, 0, 0));
+        overlay.setBackgroundColor(Color.argb(50, 0, 0, 0));
         overlay.setClickable(true);
         overlay.setOnClickListener(v -> dismissRuntimeActions());
 
         // Main panel — glassmorphism style, positioned at top
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(14), dp(12), dp(14), dp(12));
+        panel.setPadding(dp(10), dp(8), dp(10), dp(8));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(Color.argb(190, 10, 9, 14));
-        bg.setStroke(dp(1), Color.argb(70, 220, 200, 160));
-        bg.setCornerRadius(dp(12));
+        bg.setColor(Color.argb(155, 10, 9, 14));
+        bg.setStroke(dp(1), Color.argb(55, 220, 200, 160));
+        bg.setCornerRadius(dp(10));
         panel.setBackground(bg);
         panel.setClickable(true);
 
@@ -519,11 +519,11 @@ public class MainActivity extends SDLActivity
 
         // Divider
         View div = new View(this);
-        div.setBackgroundColor(Color.argb(50, 220, 200, 160));
+        div.setBackgroundColor(Color.argb(40, 220, 200, 160));
         LinearLayout.LayoutParams divParams = new LinearLayout.LayoutParams(
             LayoutParams.MATCH_PARENT, dp(1)
         );
-        divParams.setMargins(0, dp(8), 0, dp(8));
+        divParams.setMargins(0, dp(4), 0, dp(4));
         panel.addView(div, divParams);
 
         // Edit Layout button
@@ -540,8 +540,8 @@ public class MainActivity extends SDLActivity
         }));
 
         // Position the panel at the top, centered horizontally
-        int panelWidth = Math.max(dp(280), Math.min(
-            getResources().getDisplayMetrics().widthPixels - dp(40), dp(440)
+        int panelWidth = Math.max(dp(240), Math.min(
+            getResources().getDisplayMetrics().widthPixels - dp(80), dp(400)
         ));
         FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
             panelWidth,
@@ -636,18 +636,14 @@ public class MainActivity extends SDLActivity
     private TextView floatingPill()
     {
         TextView view = new TextView(this);
-        view.setText("☰");
-        view.setTextSize(18);
-        view.setTextColor(Color.argb(200, 220, 210, 190));
+        view.setText("");
+        view.setTextSize(0);
+        view.setTextColor(Color.rgb(220, 210, 190));
         view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         view.setGravity(android.view.Gravity.CENTER);
-        view.setPadding(dp(16), dp(8), dp(16), dp(8));
-        view.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(Color.argb(140, 10, 9, 14));
-        bg.setStroke(dp(1), Color.argb(60, 220, 200, 160));
-        bg.setCornerRadius(dp(20));
-        view.setBackground(bg);
+        view.setPadding(dp(18), dp(10), dp(18), dp(10));
+        view.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_runtime_dropdown, 0, 0);
+        view.setBackground(null);
         return view;
     }
 
@@ -947,6 +943,19 @@ public class MainActivity extends SDLActivity
         if (!mHideVirtualGamepad && mGamepadInvisible) {
             mGamepad.showView();
             mGamepadInvisible = false;
+        }
+
+        // Tap-to-skip: on ACTION_UP over empty game area, send Confirm key
+        if (!mEditMode && evt.getAction() == MotionEvent.ACTION_UP) {
+            float x = evt.getRawX();
+            float y = evt.getRawY();
+            // Ignore top area (menu pill) and button touches
+            if (y > dp(60) && !mGamepad.isTouchOnAnyButton(x, y)) {
+                SDLActivity.onNativeKeyDown(mGamepadConfig.keycodeA);
+                mMainHandler.postDelayed(() -> {
+                    SDLActivity.onNativeKeyUp(mGamepadConfig.keycodeA);
+                }, 30);
+            }
         }
 
         return super.dispatchTouchEvent(evt);

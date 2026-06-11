@@ -151,7 +151,7 @@ public class Gamepad
             gpadBtnDASH, gpadBtnCONFIRM, gpadBtnBACK
         };
 
-        // Setup drag listener for all buttons
+        // Setup drag listener only for positionable buttons (direct children of RelativeLayout)
         GamepadButton.OnDragListener dragListener = new GamepadButton.OnDragListener() {
             @Override
             public void onDragStart(GamepadButton view)
@@ -191,30 +191,14 @@ public class Gamepad
             }
         };
 
-        for (GamepadButton btn : allButtons) {
-            if (btn != null) {
-                btn.setOnDragListener(dragListener);
-            }
-        }
+        // Only L, R, and DPad are direct children of the root RelativeLayout
+        // and can be freely repositioned via margins. Buttons inside containers
+        // (simplified/action/mod layouts) stay in their preset positions.
+        if (gpadBtnL != null) gpadBtnL.setOnDragListener(dragListener);
+        if (gpadBtnR != null) gpadBtnR.setOnDragListener(dragListener);
 
-        // Setup in-screen gamepad touch listener for tap-to-skip
-        mGamepadLayout.setOnTouchListener((view, motionEvent) -> {
-            if (mEditMode) {
-                return false; // Edit mode touches handled by buttons directly
-            }
-            // Tap-to-skip: on ACTION_UP, check if touch hits any button
-            if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
-                float x = motionEvent.getRawX();
-                float y = motionEvent.getRawY();
-                if (!isTouchOnAnyButton(x, y) && mOnTapConfirm != null) {
-                    // Ignore touches that are clearly on the menu area (top of screen)
-                    if (y > dp(60)) {
-                        mOnTapConfirm.run();
-                    }
-                }
-            }
-            return false; // Let touches pass through to SDL surface
-        });
+        // Setup in-screen gamepad touch listener — simple pass-through
+        mGamepadLayout.setOnTouchListener((view, motionEvent) -> false);
 
         gpadDPad.setOnKeyDownListener(key -> mOnKeyDownListener.onKeyDown(key));
         gpadDPad.setOnKeyUpListener(key -> mOnKeyUpListener.onKeyUp(key));
@@ -235,7 +219,7 @@ public class Gamepad
         loadPositions();
     }
 
-    private boolean isTouchOnAnyButton(float rawX, float rawY)
+    public boolean isTouchOnAnyButton(float rawX, float rawY)
     {
         for (GamepadButton btn : allButtons) {
             if (btn == null || btn.getVisibility() != View.VISIBLE) continue;
@@ -285,11 +269,9 @@ public class Gamepad
                 }
             }
         }
-        // Also show parent containers in edit mode so buttons inside them are visible
+        // In edit mode, show only current preset's layout (not both)
         if (editMode) {
-            if (buttonsActionLayout != null) buttonsActionLayout.setVisibility(View.VISIBLE);
-            if (buttonsModLayout != null) buttonsModLayout.setVisibility(View.VISIBLE);
-            if (buttonsSimplifiedLayout != null) buttonsSimplifiedLayout.setVisibility(View.VISIBLE);
+            applyPreset();
         }
         // Apply preset visibility when exiting edit mode
         if (!editMode) {
