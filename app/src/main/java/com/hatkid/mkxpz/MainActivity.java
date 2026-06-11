@@ -90,6 +90,12 @@ public class MainActivity extends SDLActivity
     private final Set<Integer> mPressedControllerKeys = new HashSet<>();
     private boolean mTriggerHomeComboDown = false;
 
+    // Edit mode for gamepad layout
+    private boolean mEditMode = false;
+    private View mEditModeOverlay;
+
+    // Tap-to-skip: how long since last gamepad button touch
+
     // For portrait console split layout
     private FrameLayout mGamepadContainer;
     private TouchOverlayView mPortraitControls;
@@ -199,6 +205,14 @@ public class MainActivity extends SDLActivity
         mGamepad.init(mGamepadConfig, mGamepadInvisible);
         mGamepad.setOnKeyDownListener(SDLActivity::onNativeKeyDown);
         mGamepad.setOnKeyUpListener(SDLActivity::onNativeKeyUp);
+        // Tap-to-skip: tapping empty game area sends Confirm key
+        mGamepad.setOnTapConfirmListener(() -> {
+            mMainHandler.post(() -> {
+                SDLActivity.onNativeKeyDown(mGamepadConfig.keycodeA);
+                try { Thread.sleep(20); } catch (InterruptedException ignored) {}
+                SDLActivity.onNativeKeyUp(mGamepadConfig.keycodeA);
+            });
+        });
 
         // Attach gamepad after the target layout exists. Portrait mode needs a
         // dedicated lower panel; landscape keeps the upstream overlay behavior.
@@ -454,26 +468,32 @@ public class MainActivity extends SDLActivity
     private void showRuntimeActions()
     {
         if (mLayout == null) return;
+        if (mEditMode) {
+            // Don't show runtime menu in edit mode
+            return;
+        }
         if (mRuntimeActionsOverlay != null) {
             mLayout.removeView(mRuntimeActionsOverlay);
             mRuntimeActionsOverlay = null;
             return;
         }
         FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(Color.argb(95, 0, 0, 0));
+        overlay.setBackgroundColor(Color.argb(75, 0, 0, 0));
         overlay.setClickable(true);
         overlay.setOnClickListener(v -> dismissRuntimeActions());
 
+        // Main panel — glassmorphism style, positioned at top
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(12), dp(10), dp(12), dp(12));
+        panel.setPadding(dp(14), dp(12), dp(14), dp(12));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(Color.argb(218, 12, 11, 16));
-        bg.setStroke(dp(1), Color.argb(80, 200, 180, 140));
-        bg.setCornerRadius(dp(14));
+        bg.setColor(Color.argb(190, 10, 9, 14));
+        bg.setStroke(dp(1), Color.argb(70, 220, 200, 160));
+        bg.setCornerRadius(dp(12));
         panel.setBackground(bg);
         panel.setClickable(true);
 
+        // Top row: RESUME | HOME
         LinearLayout topRow = new LinearLayout(this);
         topRow.setOrientation(LinearLayout.HORIZONTAL);
         topRow.addView(runtimeButton("RESUME", R.drawable.ic_runtime_resume, v -> dismissRuntimeActions()), weightedParams(0, dp(6)));
@@ -483,21 +503,50 @@ public class MainActivity extends SDLActivity
         }), weightedParams(dp(6), 0));
         panel.addView(topRow);
 
+        // Toggle controls
         panel.addView(runtimeToggleButton(!mHideVirtualGamepad, v -> {
             toggleNativeControls();
             dismissRuntimeActions();
         }));
 
+        // Keyboard button
         panel.addView(runtimeButton("KEYBOARD", R.drawable.ic_runtime_keyboard, v -> {
             dismissRuntimeActions();
             org.libsdl.app.SDLActivity.showTextInput(0, 0, 1, 1);
         }));
 
-        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
-            Math.max(dp(300), Math.min(getResources().getDisplayMetrics().widthPixels / 2, dp(560))),
-            LayoutParams.WRAP_CONTENT,
-            android.view.Gravity.CENTER
+        // Divider
+        View div = new View(this);
+        div.setBackgroundColor(Color.argb(50, 220, 200, 160));
+        LinearLayout.LayoutParams divParams = new LinearLayout.LayoutParams(
+            LayoutParams.MATCH_PARENT, dp(1)
         );
+        divParams.setMargins(0, dp(8), 0, dp(8));
+        panel.addView(div, divParams);
+
+        // Edit Layout button
+        panel.addView(runtimeButton("EDIT LAYOUT", R.drawable.ic_runtime_edit, v -> {
+            dismissRuntimeActions();
+            enterEditMode();
+        }));
+
+        // Revert to Default button
+        panel.addView(runtimeButton("REVERT", R.drawable.ic_runtime_home, v -> {
+            mGamepad.resetPositions();
+            dismissRuntimeActions();
+            Toast.makeText(this, "Layout reset to default", Toast.LENGTH_SHORT).show();
+        }));
+
+        // Position the panel at the top, centered horizontally
+        int panelWidth = Math.max(dp(280), Math.min(
+            getResources().getDisplayMetrics().widthPixels - dp(40), dp(440)
+        ));
+        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
+            panelWidth,
+            LayoutParams.WRAP_CONTENT
+        );
+        panelParams.gravity = android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL;
+        panelParams.setMargins(0, dp(18), 0, 0);
         overlay.addView(panel, panelParams);
         mLayout.addView(overlay, new RelativeLayout.LayoutParams(
             LayoutParams.MATCH_PARENT,
@@ -585,14 +634,18 @@ public class MainActivity extends SDLActivity
     private TextView floatingPill()
     {
         TextView view = new TextView(this);
-        view.setText("");
-        view.setTextSize(0);
-        view.setTextColor(Color.rgb(220, 210, 190));
+        view.setText("☰");
+        view.setTextSize(18);
+        view.setTextColor(Color.argb(200, 220, 210, 190));
         view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         view.setGravity(android.view.Gravity.CENTER);
-        view.setPadding(dp(18), dp(10), dp(18), dp(10));
-        view.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_runtime_dropdown, 0, 0);
-        view.setBackground(null);
+        view.setPadding(dp(16), dp(8), dp(16), dp(8));
+        view.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.argb(140, 10, 9, 14));
+        bg.setStroke(dp(1), Color.argb(60, 220, 200, 160));
+        bg.setCornerRadius(dp(20));
+        view.setBackground(bg);
         return view;
     }
 
@@ -756,6 +809,123 @@ public class MainActivity extends SDLActivity
         goHomePaused();
         return true;
     }
+
+    // ---- Edit Mode ----
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void enterEditMode()
+    {
+        if (mEditMode) return;
+        mEditMode = true;
+        mGamepad.setEditMode(true);
+
+        // Show a glassy toolbar at the bottom with SAVE, REVERT, CANCEL
+        if (mLayout != null && mEditModeOverlay == null) {
+            LinearLayout toolbar = new LinearLayout(this);
+            toolbar.setOrientation(LinearLayout.HORIZONTAL);
+            toolbar.setPadding(dp(16), dp(12), dp(16), dp(16));
+
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(Color.argb(190, 10, 9, 14));
+            bg.setStroke(dp(1), Color.argb(70, 220, 200, 160));
+            bg.setCornerRadius(dp(16));
+            toolbar.setBackground(bg);
+
+            // SAVE button
+            TextView save = new TextView(this);
+            save.setText("SAVE");
+            save.setTextColor(Color.argb(230, 160, 230, 140));
+            save.setTextSize(14);
+            save.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            save.setGravity(android.view.Gravity.CENTER);
+            save.setPadding(dp(24), dp(12), dp(24), dp(12));
+            android.graphics.drawable.GradientDrawable saveBg = new android.graphics.drawable.GradientDrawable();
+            saveBg.setColor(Color.argb(50, 120, 190, 100));
+            saveBg.setStroke(dp(1), Color.argb(90, 160, 230, 140));
+            saveBg.setCornerRadius(dp(10));
+            save.setBackground(saveBg);
+            save.setOnClickListener(v -> {
+                mGamepad.savePositions();
+                exitEditMode();
+            });
+
+            // REVERT button
+            TextView revertBtn = new TextView(this);
+            revertBtn.setText("REVERT");
+            revertBtn.setTextColor(Color.argb(210, 220, 200, 180));
+            revertBtn.setTextSize(14);
+            revertBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            revertBtn.setGravity(android.view.Gravity.CENTER);
+            revertBtn.setPadding(dp(24), dp(12), dp(24), dp(12));
+            android.graphics.drawable.GradientDrawable revertBg = new android.graphics.drawable.GradientDrawable();
+            revertBg.setColor(Color.argb(50, 190, 120, 100));
+            revertBg.setStroke(dp(1), Color.argb(90, 230, 160, 140));
+            revertBg.setCornerRadius(dp(10));
+            revertBtn.setBackground(revertBg);
+            revertBtn.setOnClickListener(v -> {
+                mGamepad.resetPositions();
+                exitEditMode();
+                Toast.makeText(this, "Layout reset to default", Toast.LENGTH_SHORT).show();
+            });
+
+            // CANCEL button
+            TextView cancel = new TextView(this);
+            cancel.setText("CANCEL");
+            cancel.setTextColor(Color.argb(180, 180, 170, 155));
+            cancel.setTextSize(13);
+            cancel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            cancel.setGravity(android.view.Gravity.CENTER);
+            cancel.setPadding(dp(20), dp(12), dp(20), dp(12));
+            android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
+            cancelBg.setColor(Color.argb(35, 180, 170, 155));
+            cancelBg.setStroke(dp(1), Color.argb(55, 180, 170, 155));
+            cancelBg.setCornerRadius(dp(10));
+            cancel.setBackground(cancelBg);
+            cancel.setOnClickListener(v -> exitEditMode());
+
+            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
+            btnParams.setMargins(dp(4), 0, dp(4), 0);
+            toolbar.addView(save, btnParams);
+            toolbar.addView(revertBtn, btnParams);
+            toolbar.addView(cancel, btnParams);
+
+            // Wrap in a FrameLayout overlay
+            mEditModeOverlay = new FrameLayout(this);
+            mEditModeOverlay.setBackgroundColor(Color.argb(55, 0, 0, 0));
+            mEditModeOverlay.setOnTouchListener((v, evt) -> true);
+
+            FrameLayout.LayoutParams toolbarParams = new FrameLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+            );
+            toolbarParams.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
+            toolbarParams.setMargins(0, 0, 0, dp(20));
+            ((FrameLayout) mEditModeOverlay).addView(toolbar, toolbarParams);
+
+            mLayout.addView(mEditModeOverlay, new RelativeLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.MATCH_PARENT
+            ));
+        }
+
+        Toast.makeText(this, "Edit mode: drag buttons to reposition", Toast.LENGTH_SHORT).show();
+    }
+
+    private void exitEditMode()
+    {
+        if (!mEditMode) return;
+        mEditMode = false;
+        mGamepad.setEditMode(false);
+
+        if (mEditModeOverlay != null && mLayout != null) {
+            mLayout.removeView(mEditModeOverlay);
+            mEditModeOverlay = null;
+        }
+
+        Toast.makeText(this, "Edit mode exited", Toast.LENGTH_SHORT).show();
+    }
+
+    // ---- End Edit Mode ----
 
     private void goHomePaused()
     {

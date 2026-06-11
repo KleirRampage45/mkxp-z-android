@@ -31,6 +31,39 @@ public class GamepadButton extends ImageView
     private OnKeyDownListener mOnKeyDownListener = key -> {};
     private OnKeyUpListener mOnKeyUpListener = key -> {};
 
+    // Edit mode drag support
+    private boolean mEditMode = false;
+    private float mDragStartX, mDragStartY;
+    private OnDragListener mOnDragListener;
+
+    public interface OnDragListener
+    {
+        void onDragStart(GamepadButton view);
+        void onDragMove(GamepadButton view, int dx, int dy);
+        void onDragEnd(GamepadButton view);
+    }
+
+    public void setEditMode(boolean editMode)
+    {
+        mEditMode = editMode;
+        if (!editMode) {
+            // Restore visual state
+            this.setScaleX(1.0f);
+            this.setScaleY(1.0f);
+            this.setAlpha(1.0f);
+        }
+    }
+
+    public void setOnDragListener(OnDragListener listener)
+    {
+        mOnDragListener = listener;
+    }
+
+    public boolean isInEditMode()
+    {
+        return mEditMode;
+    }
+
     public interface OnKeyDownListener
     {
         void onKeyDown(int key);
@@ -218,6 +251,10 @@ public class GamepadButton extends ImageView
     @Override
     public boolean onTouchEvent(MotionEvent evt)
     {
+        if (mEditMode) {
+            return handleEditModeTouch(evt);
+        }
+
         switch (evt.getAction())
         {
             case MotionEvent.ACTION_DOWN:
@@ -244,6 +281,46 @@ public class GamepadButton extends ImageView
                 break;
         }
 
+        return true;
+    }
+
+    private boolean handleEditModeTouch(MotionEvent evt)
+    {
+        switch (evt.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_POINTER_DOWN:
+                mDragStartX = evt.getRawX();
+                mDragStartY = evt.getRawY();
+                // Visual feedback - slightly larger and brighter
+                this.setScaleX(1.08f);
+                this.setScaleY(1.08f);
+                this.setAlpha(0.85f);
+                if (mOnDragListener != null) {
+                    mOnDragListener.onDragStart(this);
+                }
+                return true;
+
+            case MotionEvent.ACTION_MOVE:
+                if (mOnDragListener != null) {
+                    float rawX = evt.getRawX();
+                    float rawY = evt.getRawY();
+                    int dx = (int) (rawX - mDragStartX);
+                    int dy = (int) (rawY - mDragStartY);
+                    mOnDragListener.onDragMove(this, dx, dy);
+                }
+                return true;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP:
+            case MotionEvent.ACTION_CANCEL:
+                this.setScaleX(0.94f);
+                this.setScaleY(0.94f);
+                this.setAlpha(1.0f);
+                if (mOnDragListener != null) {
+                    mOnDragListener.onDragEnd(this);
+                }
+                return true;
+        }
         return true;
     }
 }

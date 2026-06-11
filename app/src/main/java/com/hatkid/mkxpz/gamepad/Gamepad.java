@@ -2,6 +2,7 @@ package com.hatkid.mkxpz.gamepad;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.LayoutInflater;
@@ -10,17 +11,24 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.animation.AlphaAnimation;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 
 import com.runestone.app.R;
 import com.hatkid.mkxpz.utils.ViewUtils;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class Gamepad
 {
     private GamepadConfig mGamepadConfig = null;
     private boolean mInvisible = false;
+    private Context mContext;
+    private ViewGroup mParentViewGroup;
 
     private OnKeyDownListener mOnKeyDownListener = key -> {};
     private OnKeyUpListener mOnKeyUpListener = key -> {};
+    private Runnable mOnTapConfirm = null;
 
     public interface OnKeyDownListener
     {
@@ -40,6 +48,11 @@ public class Gamepad
     public void setOnKeyUpListener(OnKeyUpListener onKeyUpListener)
     {
         mOnKeyUpListener = onKeyUpListener;
+    }
+
+    public void setOnTapConfirmListener(Runnable r)
+    {
+        mOnTapConfirm = r;
     }
 
     private RelativeLayout mGamepadLayout;
@@ -64,6 +77,30 @@ public class Gamepad
     private View buttonsSimplifiedLayout;
     private GamepadDPad gpadDPad;
 
+    // All gamepad buttons array for iteration
+    private GamepadButton[] allButtons;
+
+    // Edit mode state
+    private boolean mEditMode = false;
+    private Map<Integer, int[]> mDragStartPositions; // view id -> [leftMargin, topMargin]
+    private Map<Integer, int[]> mDefaultPositions; // view id -> [leftMargin, topMargin]
+    private OnEditModeListener mOnEditModeListener;
+
+    public interface OnEditModeListener
+    {
+        void onEditModeChanged(boolean editMode);
+    }
+
+    public void setOnEditModeListener(OnEditModeListener listener)
+    {
+        mOnEditModeListener = listener;
+    }
+
+    public boolean isEditMode()
+    {
+        return mEditMode;
+    }
+
     public void init(GamepadConfig gpadConfig, boolean invisible)
     {
         mGamepadConfig = gpadConfig;
@@ -73,6 +110,9 @@ public class Gamepad
     @SuppressLint("ClickableViewAccessibility")
     public void attachTo(Context context, ViewGroup viewGroup)
     {
+        mContext = context;
+        mParentViewGroup = viewGroup;
+
         // Setup layout of in-screen gamepad
         LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         ViewGroup layout = (ViewGroup) inflater.inflate(R.layout.gamepad_layout, viewGroup);
@@ -102,8 +142,86 @@ public class Gamepad
         buttonsModLayout = layout.findViewById(R.id.buttons_mod_layout);
         buttonsSimplifiedLayout = layout.findViewById(R.id.buttons_simplified_layout);
 
-        // Setup in-screen gamepad listeners
-        mGamepadLayout.setOnTouchListener((view, motionEvent) -> false);
+        // Collect all buttons for iteration
+        allButtons = new GamepadButton[] {
+            gpadBtnA, gpadBtnB, gpadBtnC,
+            gpadBtnX, gpadBtnY, gpadBtnZ,
+            gpadBtnL, gpadBtnR,
+            gpadBtnCTRL, gpadBtnALT, gpadBtnSHIFT,
+            gpadBtnDASH, gpadBtnCONFIRM, gpadBtnBACK
+        };
+
+        // Setup drag listener for all buttons
+        GamepadButton.OnDragListener dragListener = new GamepadButton.OnDragListener() {
+            @Override
+            public void onDragStart(GamepadButton view)
+            {
+                // Save the starting position of this drag
+                RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) view.getLayoutParams();
+                if (mDragStartPositions == null) {
+                    mDragStartPositions = new HashMap<>();
+                }
+                mDragStartPositions.put(view.getId(), new int[]{lp.leftMargin, lp.topMargin});
+            }
+
+            @Override
+            public void onDragMove(GamepadButton view, int dx, int dy)
+            {
+                RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) view.getLayoutParams();
+                int[] startPos = mDragStartPositions != null ? mDragStartPositions.get(view.getId()) : null;
+                if (startPos != null) {
+                    int newLeft = Math.max(0, startPos[0] + dx);
+                    int newTop = Math.max(0, startPos[1] + dy);
+                    // Constrain to parent bounds
+                    if (mGamepadLayout != null) {
+                        int maxLeft = mGamepadLayout.getWidth() - view.getWidth();
+                        int maxTop = mGamepadLayout.getHeight() - view.getHeight();
+                        newLeft = Math.min(newLeft, Math.max(0, maxLeft));
+                        newTop = Math.min(newTop, Math.max(0, maxTop));
+                    }
+                    lp.leftMargin = newLeft;
+                    lp.topMargin = newTop;
+                    // Remove centering/alignment rules so manual margins take effect
+                    lp.addRule(RelativeLayout.CENTER_HORIZONTAL, 0);
+                    lp.addRule(RelativeLayout.CENTER_VERTICAL, 0);
+                    lp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, RelativeLayout.TRUE);
+                    lp.addRule(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
+                    view.setLayoutParams(lp);
+                }
+            }
+
+            @Override
+            public void onDragEnd(GamepadButton view)
+            {
+                mDragStartPositions = null;
+            }
+        };
+
+        for (GamepadButton btn : allButtons) {
+            if (btn != null) {
+                btn.setOnDragListener(dragListener);
+            }
+        }
+
+        // Setup in-screen gamepad touch listener for tap-to-skip
+        mGamepadLayout.setOnTouchListener((view, motionEvent) -> {
+            if (mEditMode) {
+                return false; // Edit mode touches handled by buttons directly
+            }
+            // Tap-to-skip: on ACTION_UP, check if touch hits any button
+            if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
+                float x = motionEvent.getRawX();
+                float y = motionEvent.getRawY();
+                if (!isTouchOnAnyButton(x, y) && mOnTapConfirm != null) {
+                    // Ignore touches that are clearly on the menu area (top of screen)
+                    if (y > dp(60)) {
+                        mOnTapConfirm.run();
+                    }
+                }
+            }
+            return false; // Let touches pass through to SDL surface
+        });
+
         gpadDPad.setOnKeyDownListener(key -> mOnKeyDownListener.onKeyDown(key));
         gpadDPad.setOnKeyUpListener(key -> mOnKeyUpListener.onKeyUp(key));
 
@@ -117,6 +235,198 @@ public class Gamepad
         // Apply scale and opacity from gamepad config
         ViewUtils.resize(mGamepadLayout, mGamepadConfig.scale);
         ViewUtils.changeOpacity(mGamepadLayout, mGamepadConfig.opacity);
+
+        // Save default positions and load saved positions (if any)
+        saveDefaultPositions();
+        loadPositions();
+    }
+
+    private boolean isTouchOnAnyButton(float rawX, float rawY)
+    {
+        for (GamepadButton btn : allButtons) {
+            if (btn == null || btn.getVisibility() != View.VISIBLE) continue;
+            int[] loc = new int[2];
+            btn.getLocationOnScreen(loc);
+            int left = loc[0];
+            int top = loc[1];
+            int right = left + btn.getWidth();
+            int bottom = top + btn.getHeight();
+            // Expand hit area slightly for better UX
+            int margin = dp(6);
+            if (rawX >= left - margin && rawX <= right + margin &&
+                rawY >= top - margin && rawY <= bottom + margin) {
+                return true;
+            }
+        }
+        // Also check DPad
+        if (gpadDPad != null && gpadDPad.getVisibility() == View.VISIBLE) {
+            int[] loc = new int[2];
+            gpadDPad.getLocationOnScreen(loc);
+            int left = loc[0];
+            int top = loc[1];
+            int right = left + gpadDPad.getWidth();
+            int bottom = top + gpadDPad.getHeight();
+            int margin = dp(10);
+            if (rawX >= left - margin && rawX <= right + margin &&
+                rawY >= top - margin && rawY <= bottom + margin) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---- Edit Mode ----
+
+    public void setEditMode(boolean editMode)
+    {
+        if (mEditMode == editMode) return;
+        mEditMode = editMode;
+
+        for (GamepadButton btn : allButtons) {
+            if (btn != null) {
+                btn.setEditMode(editMode);
+                // In edit mode, show all buttons regardless of preset
+                if (editMode) {
+                    btn.setVisibility(View.VISIBLE);
+                }
+            }
+        }
+        // Apply preset visibility when exiting edit mode
+        if (!editMode) {
+            applyPreset();
+            // Re-apply opacity
+            ViewUtils.changeOpacity(mGamepadLayout, mGamepadConfig.opacity);
+        }
+
+        if (mOnEditModeListener != null) {
+            mOnEditModeListener.onEditModeChanged(editMode);
+        }
+    }
+
+    // ---- Position Persistence ----
+
+    private void saveDefaultPositions()
+    {
+        mDefaultPositions = new HashMap<>();
+        for (GamepadButton btn : allButtons) {
+            if (btn == null) continue;
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) btn.getLayoutParams();
+            mDefaultPositions.put(btn.getId(), new int[]{lp.leftMargin, lp.topMargin});
+        }
+        if (gpadDPad != null) {
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) gpadDPad.getLayoutParams();
+            mDefaultPositions.put(gpadDPad.getId(), new int[]{lp.leftMargin, lp.topMargin});
+        }
+    }
+
+    private String prefKeyForView(View v, String suffix)
+    {
+        // Use view ID as stable key - fallback to res name
+        try {
+            String resName = v.getResources().getResourceEntryName(v.getId());
+            return "pos_" + resName + "_" + suffix;
+        } catch (Exception e) {
+            return "pos_" + v.getId() + "_" + suffix;
+        }
+    }
+
+    public void savePositions()
+    {
+        if (mContext == null) return;
+        SharedPreferences prefs = mContext.getSharedPreferences("gamepad_positions", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        for (GamepadButton btn : allButtons) {
+            if (btn == null) continue;
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) btn.getLayoutParams();
+            editor.putInt(prefKeyForView(btn, "left"), lp.leftMargin);
+            editor.putInt(prefKeyForView(btn, "top"), lp.topMargin);
+        }
+        if (gpadDPad != null) {
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) gpadDPad.getLayoutParams();
+            editor.putInt(prefKeyForView(gpadDPad, "left"), lp.leftMargin);
+            editor.putInt(prefKeyForView(gpadDPad, "top"), lp.topMargin);
+        }
+        editor.apply();
+        Toast.makeText(mContext, "Layout saved", Toast.LENGTH_SHORT).show();
+    }
+
+    private void loadPositions()
+    {
+        if (mContext == null) return;
+        SharedPreferences prefs = mContext.getSharedPreferences("gamepad_positions", Context.MODE_PRIVATE);
+        boolean hasAny = false;
+
+        for (GamepadButton btn : allButtons) {
+            if (btn == null) continue;
+            String leftKey = prefKeyForView(btn, "left");
+            String topKey = prefKeyForView(btn, "top");
+            if (prefs.contains(leftKey) && prefs.contains(topKey)) {
+                int savedLeft = prefs.getInt(leftKey, 0);
+                int savedTop = prefs.getInt(topKey, 0);
+                RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) btn.getLayoutParams();
+                lp.leftMargin = savedLeft;
+                lp.topMargin = savedTop;
+                lp.addRule(RelativeLayout.CENTER_HORIZONTAL, 0);
+                lp.addRule(RelativeLayout.CENTER_VERTICAL, 0);
+                lp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, RelativeLayout.TRUE);
+                lp.addRule(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
+                btn.setLayoutParams(lp);
+                hasAny = true;
+            }
+        }
+        if (gpadDPad != null) {
+            String leftKey = prefKeyForView(gpadDPad, "left");
+            String topKey = prefKeyForView(gpadDPad, "top");
+            if (prefs.contains(leftKey) && prefs.contains(topKey)) {
+                int savedLeft = prefs.getInt(leftKey, 0);
+                int savedTop = prefs.getInt(topKey, 0);
+                RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) gpadDPad.getLayoutParams();
+                lp.leftMargin = savedLeft;
+                lp.topMargin = savedTop;
+                lp.addRule(RelativeLayout.CENTER_HORIZONTAL, 0);
+                lp.addRule(RelativeLayout.CENTER_VERTICAL, 0);
+                lp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, RelativeLayout.TRUE);
+                lp.addRule(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
+                gpadDPad.setLayoutParams(lp);
+            }
+        }
+    }
+
+    public void resetPositions()
+    {
+        if (mContext == null) return;
+
+        // Clear saved positions
+        SharedPreferences prefs = mContext.getSharedPreferences("gamepad_positions", Context.MODE_PRIVATE);
+        prefs.edit().clear().apply();
+
+        // Reset all buttons to default positions from XML
+        for (Map.Entry<Integer, int[]> entry : mDefaultPositions.entrySet()) {
+            View v = findViewForId(entry.getKey());
+            if (v == null) continue;
+            int[] defaultPos = entry.getValue();
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) v.getLayoutParams();
+            lp.leftMargin = defaultPos[0];
+            lp.topMargin = defaultPos[1];
+            // Restore original alignment rules
+            lp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, 0);
+            lp.addRule(RelativeLayout.ALIGN_PARENT_TOP, 0);
+            v.setLayoutParams(lp);
+        }
+
+        // Re-apply preset visibility
+        applyPreset();
+
+        Toast.makeText(mContext, "Layout reset to default", Toast.LENGTH_SHORT).show();
+    }
+
+    private View findViewForId(int id)
+    {
+        for (GamepadButton btn : allButtons) {
+            if (btn != null && btn.getId() == id) return btn;
+        }
+        if (gpadDPad != null && gpadDPad.getId() == id) return gpadDPad;
+        return null;
     }
 
     private void applyPreset()
@@ -177,6 +487,11 @@ public class Gamepad
         }
     }
 
+    public void setInvisible(boolean invisible)
+    {
+        mInvisible = invisible;
+    }
+
     private void initGamepadButtons()
     {
         // Simplified mode labels (action-based)
@@ -200,6 +515,17 @@ public class Gamepad
         setGamepadButtonKey(gpadBtnCTRL, mGamepadConfig.keycodeCTRL, "Ctrl");
         setGamepadButtonKey(gpadBtnALT, mGamepadConfig.keycodeALT, "Alt");
         setGamepadButtonKey(gpadBtnSHIFT, mGamepadConfig.keycodeSHIFT, "Shift");
+    }
+
+    private int dp(int value)
+    {
+        if (mContext == null) return value;
+        return (int) (value * mContext.getResources().getDisplayMetrics().density);
+    }
+
+    public RelativeLayout getGamepadLayout()
+    {
+        return mGamepadLayout;
     }
 
     public boolean processGamepadEvent(KeyEvent evt)
