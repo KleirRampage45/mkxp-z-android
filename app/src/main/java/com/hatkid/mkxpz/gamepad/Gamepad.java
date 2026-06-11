@@ -150,14 +150,11 @@ public class Gamepad
             @Override
             public void onDragStart(GamepadButton view)
             {
-                // Save the starting position of this drag
-                int[] margins = getMarginPosition(view);
-                if (margins != null) {
-                    if (mDragStartPositions == null) {
-                        mDragStartPositions = new HashMap<>();
-                    }
-                    mDragStartPositions.put(view.getId(), margins);
+                // Save the starting pixel position of this drag
+                if (mDragStartPositions == null) {
+                    mDragStartPositions = new HashMap<>();
                 }
+                mDragStartPositions.put(view.getId(), new int[]{view.getLeft(), view.getTop()});
             }
 
             @Override
@@ -174,7 +171,7 @@ public class Gamepad
                         newLeft = Math.min(newLeft, Math.max(0, maxLeft));
                         newTop = Math.min(newTop, Math.max(0, maxTop));
                     }
-                    setMarginPosition(view, newLeft, newTop);
+                    moveViewTo(view, newLeft, newTop);
                 }
             }
 
@@ -280,48 +277,34 @@ public class Gamepad
     }
 
     // ---- Position Persistence ----
+    // Uses pixel positions (getLeft/getTop) rather than margins,
+    // so alignment rules (LEFT|TOP vs END|BOTTOM) don't matter.
 
     private void saveDefaultPositions()
     {
         mDefaultPositions = new HashMap<>();
         for (GamepadButton btn : allButtons) {
             if (btn == null) continue;
-            int[] margins = getMarginPosition(btn);
-            if (margins != null) {
-                mDefaultPositions.put(btn.getId(), margins);
-            }
+            mDefaultPositions.put(btn.getId(), new int[]{btn.getLeft(), btn.getTop()});
         }
         if (gpadDPad != null) {
-            int[] margins = getMarginPosition(gpadDPad);
-            if (margins != null) {
-                mDefaultPositions.put(gpadDPad.getId(), margins);
-            }
+            mDefaultPositions.put(gpadDPad.getId(), new int[]{gpadDPad.getLeft(), gpadDPad.getTop()});
         }
     }
 
-    private int[] getMarginPosition(View v)
-    {
-        if (v == null) return null;
-        ViewGroup.LayoutParams lp = v.getLayoutParams();
-        if (lp instanceof ViewGroup.MarginLayoutParams) {
-            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-            return new int[]{mlp.leftMargin, mlp.topMargin};
-        }
-        return null;
-    }
-
-    private boolean setMarginPosition(View v, int left, int top)
+    /**
+     * Move a view to an absolute pixel position (left, top).
+     * Converts to appropriate margins + alignment rules.
+     */
+    private boolean moveViewTo(View v, int left, int top)
     {
         if (v == null) return false;
         ViewGroup.LayoutParams lp = v.getLayoutParams();
         if (lp instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-            mlp.leftMargin = left;
-            mlp.topMargin = top;
-            // If it's a RelativeLayout child, clear all alignment rules and use absolute positioning
             if (mlp instanceof RelativeLayout.LayoutParams) {
                 RelativeLayout.LayoutParams rlp = (RelativeLayout.LayoutParams) mlp;
-                // Clear ALL alignment rules to avoid conflicts
+                // Clear ALL alignment rules
                 rlp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, 0);
                 rlp.addRule(RelativeLayout.ALIGN_PARENT_TOP, 0);
                 rlp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT, 0);
@@ -331,10 +314,13 @@ public class Gamepad
                 rlp.addRule(RelativeLayout.CENTER_HORIZONTAL, 0);
                 rlp.addRule(RelativeLayout.CENTER_VERTICAL, 0);
                 rlp.addRule(RelativeLayout.CENTER_IN_PARENT, 0);
-                // Set absolute left/top positioning
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_START, 0);
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_END, 0);
                 rlp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, RelativeLayout.TRUE);
                 rlp.addRule(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
             }
+            mlp.leftMargin = left;
+            mlp.topMargin = top;
             v.setLayoutParams(lp);
             return true;
         }
@@ -359,18 +345,12 @@ public class Gamepad
         SharedPreferences.Editor editor = prefs.edit();
         for (GamepadButton btn : allButtons) {
             if (btn == null) continue;
-            int[] margins = getMarginPosition(btn);
-            if (margins != null) {
-                editor.putInt(prefKeyForView(btn, "left"), margins[0]);
-                editor.putInt(prefKeyForView(btn, "top"), margins[1]);
-            }
+            editor.putInt(prefKeyForView(btn, "left"), btn.getLeft());
+            editor.putInt(prefKeyForView(btn, "top"), btn.getTop());
         }
         if (gpadDPad != null) {
-            int[] margins = getMarginPosition(gpadDPad);
-            if (margins != null) {
-                editor.putInt(prefKeyForView(gpadDPad, "left"), margins[0]);
-                editor.putInt(prefKeyForView(gpadDPad, "top"), margins[1]);
-            }
+            editor.putInt(prefKeyForView(gpadDPad, "left"), gpadDPad.getLeft());
+            editor.putInt(prefKeyForView(gpadDPad, "top"), gpadDPad.getTop());
         }
         editor.apply();
         Toast.makeText(mContext, "Layout saved", Toast.LENGTH_SHORT).show();
@@ -388,7 +368,7 @@ public class Gamepad
             if (prefs.contains(leftKey) && prefs.contains(topKey)) {
                 int savedLeft = prefs.getInt(leftKey, 0);
                 int savedTop = prefs.getInt(topKey, 0);
-                setMarginPosition(btn, savedLeft, savedTop);
+                moveViewTo(btn, savedLeft, savedTop);
             }
         }
         if (gpadDPad != null) {
@@ -397,7 +377,7 @@ public class Gamepad
             if (prefs.contains(leftKey) && prefs.contains(topKey)) {
                 int savedLeft = prefs.getInt(leftKey, 0);
                 int savedTop = prefs.getInt(topKey, 0);
-                setMarginPosition(gpadDPad, savedLeft, savedTop);
+                moveViewTo(gpadDPad, savedLeft, savedTop);
             }
         }
     }
@@ -415,7 +395,7 @@ public class Gamepad
             View v = findViewForId(entry.getKey());
             if (v == null) continue;
             int[] defaultPos = entry.getValue();
-            setMarginPosition(v, defaultPos[0], defaultPos[1]);
+            moveViewTo(v, defaultPos[0], defaultPos[1]);
         }
 
         // Re-apply preset visibility
