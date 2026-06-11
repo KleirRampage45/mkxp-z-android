@@ -93,6 +93,7 @@ public class MainActivity extends SDLActivity
     // Edit mode for gamepad layout
     private boolean mEditMode = false;
     private View mEditModeOverlay;
+    private View mEditDimBg;
     private View mMenuPill;
 
     // Tap-to-skip: how long since last gamepad button touch
@@ -836,39 +837,51 @@ public class MainActivity extends SDLActivity
         mEditMode = true;
         mGamepad.setEditMode(true);
 
-        // Show a small centered toolbar at the bottom — no full-screen overlay,
-        // so touches pass through to gamepad buttons for dragging.
-        if (mLayout != null && mEditModeOverlay == null) {
+        if (mLayout != null) {
+            // 1. Dim overlay — blocks touches to the SDL surface (game doesn't respond)
+            mEditDimBg = new View(this);
+            mEditDimBg.setBackgroundColor(Color.argb(80, 0, 0, 0));
+            mEditDimBg.setClickable(true);
+            mEditDimBg.setFocusable(true);
+            mEditDimBg.setOnTouchListener((v, evt) -> true); // consume all touches
+            mLayout.addView(mEditDimBg, new RelativeLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.MATCH_PARENT
+            ));
+
+            // 2. Bring gamepad layout above the dim overlay so buttons stay draggable
+            if (mGamepad.getGamepadLayout() != null) {
+                mGamepad.getGamepadLayout().bringToFront();
+            }
+
+            // 3. Small centered toolbar at the bottom
             LinearLayout toolbar = new LinearLayout(this);
             toolbar.setOrientation(LinearLayout.HORIZONTAL);
             toolbar.setPadding(dp(8), dp(6), dp(8), dp(6));
 
             android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-            bg.setColor(Color.argb(200, 10, 9, 14));
-            bg.setStroke(dp(1), Color.argb(80, 220, 200, 160));
+            bg.setColor(Color.argb(210, 10, 9, 14));
+            bg.setStroke(dp(1), Color.argb(85, 220, 200, 160));
             bg.setCornerRadius(dp(14));
             toolbar.setBackground(bg);
 
-            // SAVE button
             TextView save = smallEditButton("SAVE", Color.argb(230, 160, 230, 140),
-                Color.argb(50, 120, 190, 100), Color.argb(90, 160, 230, 140));
+                Color.argb(55, 120, 190, 100), Color.argb(95, 160, 230, 140));
             save.setOnClickListener(v -> {
                 mGamepad.savePositions();
                 exitEditMode();
             });
 
-            // REVERT button
             TextView revertBtn = smallEditButton("REVERT", Color.argb(210, 220, 200, 180),
-                Color.argb(50, 190, 120, 100), Color.argb(90, 230, 160, 140));
+                Color.argb(55, 190, 120, 100), Color.argb(95, 230, 160, 140));
             revertBtn.setOnClickListener(v -> {
                 mGamepad.resetPositions();
                 exitEditMode();
                 Toast.makeText(this, "Layout reset to default", Toast.LENGTH_SHORT).show();
             });
 
-            // CANCEL button
             TextView cancel = smallEditButton("CANCEL", Color.argb(180, 180, 170, 155),
-                Color.argb(35, 180, 170, 155), Color.argb(55, 180, 170, 155));
+                Color.argb(40, 180, 170, 155), Color.argb(60, 180, 170, 155));
             cancel.setOnClickListener(v -> exitEditMode());
 
             LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
@@ -878,16 +891,16 @@ public class MainActivity extends SDLActivity
             toolbar.addView(revertBtn, btnParams);
             toolbar.addView(cancel, btnParams);
 
-            // Add to layout — small floating panel at bottom center
-            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
+            RelativeLayout.LayoutParams toolParams = new RelativeLayout.LayoutParams(
                 LayoutParams.WRAP_CONTENT,
                 LayoutParams.WRAP_CONTENT
             );
-            params.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-            params.addRule(RelativeLayout.CENTER_HORIZONTAL);
-            params.setMargins(0, 0, 0, dp(16));
-            mLayout.addView(toolbar, params);
-            mEditModeOverlay = toolbar;
+            toolParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            toolParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
+            toolParams.setMargins(0, 0, 0, dp(16));
+            mLayout.addView(toolbar, toolParams);
+
+            mEditModeOverlay = toolbar; // keep reference for cleanup
         }
 
         Toast.makeText(this, "Edit mode: drag buttons to reposition", Toast.LENGTH_SHORT).show();
@@ -916,6 +929,13 @@ public class MainActivity extends SDLActivity
         mEditMode = false;
         mGamepad.setEditMode(false);
 
+        // Remove the dim overlay
+        if (mEditDimBg != null && mLayout != null) {
+            mLayout.removeView(mEditDimBg);
+            mEditDimBg = null;
+        }
+
+        // Remove the toolbar
         if (mEditModeOverlay != null && mLayout != null) {
             mLayout.removeView(mEditModeOverlay);
             mEditModeOverlay = null;

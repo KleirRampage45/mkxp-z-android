@@ -325,11 +325,20 @@ public class Gamepad
             ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
             mlp.leftMargin = left;
             mlp.topMargin = top;
-            // If it's a RelativeLayout child, add alignment rules
+            // If it's a RelativeLayout child, clear all alignment rules and use absolute positioning
             if (mlp instanceof RelativeLayout.LayoutParams) {
                 RelativeLayout.LayoutParams rlp = (RelativeLayout.LayoutParams) mlp;
+                // Clear ALL alignment rules to avoid conflicts
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, 0);
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_TOP, 0);
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT, 0);
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, 0);
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_START, 0);
+                rlp.addRule(RelativeLayout.ALIGN_PARENT_END, 0);
                 rlp.addRule(RelativeLayout.CENTER_HORIZONTAL, 0);
                 rlp.addRule(RelativeLayout.CENTER_VERTICAL, 0);
+                rlp.addRule(RelativeLayout.CENTER_IN_PARENT, 0);
+                // Set absolute left/top positioning
                 rlp.addRule(RelativeLayout.ALIGN_PARENT_LEFT, RelativeLayout.TRUE);
                 rlp.addRule(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
             }
