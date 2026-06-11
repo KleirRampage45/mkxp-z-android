@@ -167,7 +167,22 @@ public class GamepadButton extends ImageView
 
         Drawable bg = mPressed && mPressedBackgroundDrawable != null ? mPressedBackgroundDrawable : mBackgroundDrawable;
         if (bg != null) {
-            bg.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+            // Preserve aspect ratio: center the drawable in the view bounds
+            int bw = bg.getIntrinsicWidth();
+            int bh = bg.getIntrinsicHeight();
+            if (bw > 0 && bh > 0) {
+                float scale = Math.min(
+                    (float) canvas.getWidth() / bw,
+                    (float) canvas.getHeight() / bh
+                );
+                int scaledW = Math.round(bw * scale);
+                int scaledH = Math.round(bh * scale);
+                int offX = (canvas.getWidth() - scaledW) / 2;
+                int offY = (canvas.getHeight() - scaledH) / 2;
+                bg.setBounds(offX, offY, offX + scaledW, offY + scaledH);
+            } else {
+                bg.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+            }
             bg.draw(canvas);
         }
 
@@ -177,7 +192,22 @@ public class GamepadButton extends ImageView
         int ph = (canvas.getHeight() - h) / 2;
 
         if (mForegroundDrawable != null) {
-            mForegroundDrawable.setBounds(pw, ph, w + pw, h + ph);
+            // Preserve aspect ratio for foreground too
+            int fw = mForegroundDrawable.getIntrinsicWidth();
+            int fh = mForegroundDrawable.getIntrinsicHeight();
+            if (fw > 0 && fh > 0) {
+                float fScale = Math.min(
+                    (float) w / fw,
+                    (float) h / fh
+                );
+                int scaledFw = Math.round(fw * fScale);
+                int scaledFh = Math.round(fh * fScale);
+                int fOffX = (canvas.getWidth() - scaledFw) / 2;
+                int fOffY = (canvas.getHeight() - scaledFh) / 2;
+                mForegroundDrawable.setBounds(fOffX, fOffY, fOffX + scaledFw, fOffY + scaledFh);
+            } else {
+                mForegroundDrawable.setBounds(pw, ph, w + pw, h + ph);
+            }
             mForegroundDrawable.draw(canvas);
         }
 

@@ -946,28 +946,38 @@ public class MainActivity extends SDLActivity
             mGamepadInvisible = false;
         }
 
-        // Tap-to-skip: on ACTION_UP over empty game area, send Confirm key + mouse click
+        // Tap-to-skip: on ACTION_UP over empty game area, send directional input + confirm
         if (!mEditMode && evt.getAction() == MotionEvent.ACTION_UP) {
             float x = evt.getRawX();
             float y = evt.getRawY();
             // Ignore top area (menu pill) and button touches
             if (y > dp(60) && !mGamepad.isTouchOnAnyButton(x, y)) {
+                // Send directional key based on tap quadrant relative to screen center
+                int screenW = getResources().getDisplayMetrics().widthPixels;
+                int screenH = getResources().getDisplayMetrics().heightPixels;
+                float cx = screenW / 2f;
+                float cy = screenH / 2f;
+                float dx = x - cx;
+                float dy = y - cy;
+                // Only send direction if tap is far enough from center (outside 20% dead zone)
+                float deadZone = Math.min(screenW, screenH) * 0.1f;
+                if (Math.abs(dx) > deadZone || Math.abs(dy) > deadZone) {
+                    int dirKey;
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        dirKey = dx > 0 ? KeyEvent.KEYCODE_DPAD_RIGHT : KeyEvent.KEYCODE_DPAD_LEFT;
+                    } else {
+                        dirKey = dy > 0 ? KeyEvent.KEYCODE_DPAD_DOWN : KeyEvent.KEYCODE_DPAD_UP;
+                    }
+                    SDLActivity.onNativeKeyDown(dirKey);
+                    mMainHandler.postDelayed(() -> {
+                        SDLActivity.onNativeKeyUp(dirKey);
+                    }, 50);
+                }
+                // Also send Confirm key for interaction
                 SDLActivity.onNativeKeyDown(mGamepadConfig.keycodeA);
                 mMainHandler.postDelayed(() -> {
                     SDLActivity.onNativeKeyUp(mGamepadConfig.keycodeA);
                 }, 30);
-                // Also inject mouse click at tap position for click-to-move support
-                // Convert screen coords to surface coords (account for layout offset)
-                int[] surfaceLoc = new int[2];
-                if (mSurface != null) {
-                    mSurface.getLocationOnScreen(surfaceLoc);
-                    float surfaceX = x - surfaceLoc[0];
-                    float surfaceY = y - surfaceLoc[1];
-                    SDLActivity.onNativeMouse(0, MotionEvent.ACTION_DOWN, surfaceX, surfaceY, false);
-                    mMainHandler.postDelayed(() -> {
-                        SDLActivity.onNativeMouse(0, MotionEvent.ACTION_UP, surfaceX, surfaceY, false);
-                    }, 20);
-                }
             }
         }
 

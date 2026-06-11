@@ -28,8 +28,8 @@
     <!-- L shoulder: top-left -->
     <com.hatkid.mkxpz.gamepad.GamepadButton
         android:id="@+id/button_L"
-        android:layout_width="@dimen/_44sdp"
-        android:layout_height="@dimen/_32sdp"
+        android:layout_width="@dimen/_40sdp"
+        android:layout_height="@dimen/_40sdp"
         android:layout_alignParentStart="true"
         android:layout_alignParentTop="true"
         android:layout_marginStart="@dimen/_12sdp"
@@ -41,8 +41,8 @@
     <!-- R shoulder: top-right -->
     <com.hatkid.mkxpz.gamepad.GamepadButton
         android:id="@+id/button_R"
-        android:layout_width="@dimen/_44sdp"
-        android:layout_height="@dimen/_32sdp"
+        android:layout_width="@dimen/_40sdp"
+        android:layout_height="@dimen/_40sdp"
         android:layout_alignParentEnd="true"
         android:layout_alignParentTop="true"
         android:layout_marginEnd="@dimen/_12sdp"
