@@ -431,7 +431,7 @@ public class Gamepad
         return null;
     }
 
-    private void applyPreset()
+    public void applyPreset()
     {
         boolean isFull = "FULL".equals(mGamepadConfig.preset);
         if (buttonsActionLayout != null) {
