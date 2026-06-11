@@ -6,17 +6,17 @@
     android:viewportWidth="128"
     android:viewportHeight="128"
 >
-    <!-- Outer rounded rect: frosted glass border -->
+    <!-- Outer rounded rect: pressed state - brighter glass -->
     <path
         android:pathData="M16,0L112,0A16,16 0,0 1,128 16L128,112A16,16 0,0 1,112 128L16,128A16,16 0,0 1,0 112L0,16A16,16 0,0 1,16 0z"
-        android:fillColor="#28FFFFFF"
-        android:strokeColor="#55FFFFFF"
-        android:strokeWidth="1"
+        android:fillColor="#55FFFFFF"
+        android:strokeColor="#99FFFFFF"
+        android:strokeWidth="1.5"
     />
-    <!-- Inner rounded rect: darker glass fill -->
+    <!-- Inner rounded rect: brighter glass fill when pressed -->
     <path
         android:pathData="M19.53,6L108.47,6a13.53,13.53 0,0 1,13.53 13.53L122,108.47a13.53,13.53 0,0 1,-13.53 13.53L19.53,122A13.53,13.53 0,0 1,6 108.47L6,19.53A13.53,13.53 0,0 1,19.53 6z"
-        android:fillColor="#14FFFFFF"
+        android:fillColor="#3DFFFFFF"
         android:strokeWidth="0"
     />
 </vector>

@@ -2,6 +2,7 @@ package com.hatkid.mkxpz.gamepad;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.LayoutInflater;
 import android.view.InputDevice;
@@ -55,6 +56,13 @@ public class Gamepad
     private GamepadButton gpadBtnCTRL;
     private GamepadButton gpadBtnALT;
     private GamepadButton gpadBtnSHIFT;
+    private GamepadButton gpadBtnDASH;
+    private GamepadButton gpadBtnCONFIRM;
+    private GamepadButton gpadBtnBACK;
+    private View buttonsActionLayout;
+    private View buttonsModLayout;
+    private View buttonsSimplifiedLayout;
+    private GamepadDPad gpadDPad;
 
     public void init(GamepadConfig gpadConfig, boolean invisible)
     {
@@ -75,7 +83,7 @@ public class Gamepad
         }
 
         // Setup D-Pad and buttons
-        GamepadDPad gpadDPad = layout.findViewById(R.id.dpad);
+        gpadDPad = layout.findViewById(R.id.dpad);
         gpadBtnA = layout.findViewById(R.id.button_A);
         gpadBtnB = layout.findViewById(R.id.button_B);
         gpadBtnC = layout.findViewById(R.id.button_C);
@@ -87,6 +95,12 @@ public class Gamepad
         gpadBtnCTRL = layout.findViewById(R.id.button_CTRL);
         gpadBtnALT = layout.findViewById(R.id.button_ALT);
         gpadBtnSHIFT = layout.findViewById(R.id.button_SHIFT);
+        gpadBtnDASH = layout.findViewById(R.id.button_DASH);
+        gpadBtnCONFIRM = layout.findViewById(R.id.button_CONFIRM);
+        gpadBtnBACK = layout.findViewById(R.id.button_BACK);
+        buttonsActionLayout = layout.findViewById(R.id.buttons_action_layout);
+        buttonsModLayout = layout.findViewById(R.id.buttons_mod_layout);
+        buttonsSimplifiedLayout = layout.findViewById(R.id.buttons_simplified_layout);
 
         // Setup in-screen gamepad listeners
         mGamepadLayout.setOnTouchListener((view, motionEvent) -> false);
@@ -98,25 +112,46 @@ public class Gamepad
 
         // Setup buttons for gamepad
         initGamepadButtons();
+        applyPreset();
 
         // Apply scale and opacity from gamepad config
         ViewUtils.resize(mGamepadLayout, mGamepadConfig.scale);
         ViewUtils.changeOpacity(mGamepadLayout, mGamepadConfig.opacity);
     }
 
-    private void setGamepadButtonKey(GamepadButton gpadBtn, Integer keycode)
+    private void applyPreset()
     {
-        // Prepare label for gamepad button
-        String btnLabel = KeyEvent.keyCodeToString(keycode)
-            .replace("KEYCODE_", "")
-            .replace("_LEFT", "")
-            .replace("_RIGHT", "");
+        boolean isFull = "FULL".equals(mGamepadConfig.preset);
+        if (buttonsActionLayout != null) {
+            buttonsActionLayout.setVisibility(isFull ? View.VISIBLE : View.GONE);
+        }
+        if (buttonsModLayout != null) {
+            buttonsModLayout.setVisibility(isFull ? View.VISIBLE : View.GONE);
+        }
+        if (buttonsSimplifiedLayout != null) {
+            buttonsSimplifiedLayout.setVisibility(isFull ? View.GONE : View.VISIBLE);
+        }
+    }
 
-        // Set gamepad button
+    private void setGamepadButtonKey(GamepadButton gpadBtn, Integer keycode, String label)
+    {
+        if (gpadBtn == null) return;
+        String btnLabel = label;
+        if (btnLabel == null || btnLabel.isEmpty()) {
+            btnLabel = KeyEvent.keyCodeToString(keycode)
+                .replace("KEYCODE_", "")
+                .replace("_LEFT", "")
+                .replace("_RIGHT", "");
+        }
         gpadBtn.setForegroundText(btnLabel);
         gpadBtn.setKey(keycode);
         gpadBtn.setOnKeyDownListener(key -> mOnKeyDownListener.onKeyDown(key));
         gpadBtn.setOnKeyUpListener(key -> mOnKeyUpListener.onKeyUp(key));
+    }
+
+    private void setGamepadButtonKey(GamepadButton gpadBtn, Integer keycode)
+    {
+        setGamepadButtonKey(gpadBtn, keycode, null);
     }
 
     public void showView()
@@ -144,17 +179,27 @@ public class Gamepad
 
     private void initGamepadButtons()
     {
-        setGamepadButtonKey(gpadBtnA, mGamepadConfig.keycodeA);
-        setGamepadButtonKey(gpadBtnB, mGamepadConfig.keycodeB);
-        setGamepadButtonKey(gpadBtnC, mGamepadConfig.keycodeC);
-        setGamepadButtonKey(gpadBtnX, mGamepadConfig.keycodeX);
-        setGamepadButtonKey(gpadBtnY, mGamepadConfig.keycodeY);
-        setGamepadButtonKey(gpadBtnZ, mGamepadConfig.keycodeZ);
-        setGamepadButtonKey(gpadBtnL, mGamepadConfig.keycodeL);
-        setGamepadButtonKey(gpadBtnR, mGamepadConfig.keycodeR);
-        setGamepadButtonKey(gpadBtnCTRL, mGamepadConfig.keycodeCTRL);
-        setGamepadButtonKey(gpadBtnALT, mGamepadConfig.keycodeALT);
-        setGamepadButtonKey(gpadBtnSHIFT, mGamepadConfig.keycodeSHIFT);
+        // Simplified mode labels (action-based)
+        setGamepadButtonKey(gpadBtnCONFIRM, mGamepadConfig.keycodeA, "✓");
+        setGamepadButtonKey(gpadBtnBACK, mGamepadConfig.keycodeB, "◁");
+        setGamepadButtonKey(gpadBtnDASH, mGamepadConfig.keycodeSHIFT, "Dash");
+
+        // Full mode labels (key-based)
+        setGamepadButtonKey(gpadBtnA, mGamepadConfig.keycodeA, "Confirm");
+        setGamepadButtonKey(gpadBtnB, mGamepadConfig.keycodeB, "Back");
+        setGamepadButtonKey(gpadBtnC, mGamepadConfig.keycodeC, "Dash");
+        setGamepadButtonKey(gpadBtnX, mGamepadConfig.keycodeX, "A");
+        setGamepadButtonKey(gpadBtnY, mGamepadConfig.keycodeY, "S");
+        setGamepadButtonKey(gpadBtnZ, mGamepadConfig.keycodeZ, "D");
+
+        // Shoulder buttons (both modes)
+        setGamepadButtonKey(gpadBtnL, mGamepadConfig.keycodeL, "L");
+        setGamepadButtonKey(gpadBtnR, mGamepadConfig.keycodeR, "R");
+
+        // Modifiers (full mode only)
+        setGamepadButtonKey(gpadBtnCTRL, mGamepadConfig.keycodeCTRL, "Ctrl");
+        setGamepadButtonKey(gpadBtnALT, mGamepadConfig.keycodeALT, "Alt");
+        setGamepadButtonKey(gpadBtnSHIFT, mGamepadConfig.keycodeSHIFT, "Shift");
     }
 
     public boolean processGamepadEvent(KeyEvent evt)

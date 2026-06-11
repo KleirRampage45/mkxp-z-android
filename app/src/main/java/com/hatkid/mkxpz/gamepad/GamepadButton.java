@@ -18,10 +18,12 @@ import com.runestone.app.R;
 public class GamepadButton extends ImageView
 {
     private Drawable mBackgroundDrawable;
+    private Drawable mPressedBackgroundDrawable;
+    private boolean mPressed = false;
     private Drawable mForegroundDrawable;
     private String mText;
     private int mTextSize = 36;
-    private final int mTextColor = Color.rgb(255, 255, 255);
+    private final int mTextColor = Color.argb(222, 255, 255, 255); // 87% white
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private int mKey = 0;
@@ -84,6 +86,13 @@ public class GamepadButton extends ImageView
     public void setBackground(Drawable drawable)
     {
         this.mBackgroundDrawable = drawable;
+        this.mPressedBackgroundDrawable = null;
+        initBitmap();
+    }
+
+    public void setPressedBackground(Drawable drawable)
+    {
+        this.mPressedBackgroundDrawable = drawable;
         initBitmap();
     }
 
@@ -123,9 +132,10 @@ public class GamepadButton extends ImageView
         Bitmap bitmap = Bitmap.createBitmap(this.getWidth(), this.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
 
-        if (mBackgroundDrawable != null) {
-            mBackgroundDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-            mBackgroundDrawable.draw(canvas);
+        Drawable bg = mPressed && mPressedBackgroundDrawable != null ? mPressedBackgroundDrawable : mBackgroundDrawable;
+        if (bg != null) {
+            bg.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+            bg.draw(canvas);
         }
 
         int w = (int) Math.round(canvas.getWidth() * 0.9);
@@ -212,14 +222,24 @@ public class GamepadButton extends ImageView
         {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                this.setAlpha(0.5f);
+                mPressed = true;
+                // Scale down slightly for press effect
+                this.setScaleX(0.94f);
+                this.setScaleY(0.94f);
+                this.setAlpha(0.92f);
+                initBitmap();
                 mOnKeyDownListener.onKeyDown(mKey);
                 break;
 
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP:
             case MotionEvent.ACTION_CANCEL:
+                mPressed = false;
+                // Restore from press
+                this.setScaleX(1.0f);
+                this.setScaleY(1.0f);
                 this.setAlpha(1.0f);
+                initBitmap();
                 mOnKeyUpListener.onKeyUp(mKey);
                 break;
         }

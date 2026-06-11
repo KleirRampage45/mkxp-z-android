@@ -61,6 +61,7 @@ public class MainActivity extends SDLActivity
     public static final String EXTRA_INTEGER_SCALING = "com.runestone.app.extra.INTEGER_SCALING";
     public static final String EXTRA_DISPLAY_CUTOUT_MODE = "com.runestone.app.extra.DISPLAY_CUTOUT_MODE";
     public static final String EXTRA_CONTROLLER_HOME_SHORTCUT = "com.runestone.app.extra.CONTROLLER_HOME_SHORTCUT";
+    public static final String EXTRA_CONTROLLER_PRESET = "com.runestone.app.extra.CONTROLLER_PRESET";
 
     // Layout modes (match RunnerSettings.LayoutMode)
     private static final String MODE_LANDSCAPE      = "LANDSCAPE";
@@ -296,7 +297,8 @@ public class MainActivity extends SDLActivity
             + " integerScaling=" + intent.getBooleanExtra(EXTRA_INTEGER_SCALING, false)
             + " hideVirtualGamepad=" + mHideVirtualGamepad
             + " cutout=" + mDisplayCutoutMode
-            + " homeShortcut=" + mControllerHomeShortcut);
+            + " homeShortcut=" + mControllerHomeShortcut
+            + " preset=" + intent.getStringExtra(EXTRA_CONTROLLER_PRESET));
     }
 
     private void applyOrientation()
@@ -340,6 +342,10 @@ public class MainActivity extends SDLActivity
         }
         if (intent.hasExtra(EXTRA_TOUCH_SCALE)) {
             config.scale = (int) (intent.getFloatExtra(EXTRA_TOUCH_SCALE, 1.0f) * 100);
+        }
+        String preset = intent.getStringExtra(EXTRA_CONTROLLER_PRESET);
+        if (preset != null && !preset.isEmpty()) {
+            config.preset = preset;
         }
 
         return config;
