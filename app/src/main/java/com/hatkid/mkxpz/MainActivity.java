@@ -513,7 +513,7 @@ public class MainActivity extends SDLActivity
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setOrientation(LinearLayout.HORIZONTAL);
         boolean isFull = "FULL".equals(mGamepadConfig.preset);
-        modeRow.addView(runtimeButton(isFull ? "BASIC MODE" : "FULL MODE", R.drawable.ic_runtime_edit, v -> {
+        modeRow.addView(runtimeButton(isFull ? "BASIC" : "FULL", R.drawable.ic_runtime_controls, v -> {
             dismissRuntimeActions();
             toggleControllerPreset();
         }), weightedParams(0, dp(6)));
@@ -536,7 +536,7 @@ public class MainActivity extends SDLActivity
             dismissRuntimeActions();
             enterEditMode();
         }), weightedParams(dp(6), dp(6)));
-        thirdRow.addView(runtimeButton("REVERT", R.drawable.ic_runtime_home, v -> {
+        thirdRow.addView(runtimeButton("REVERT", 0, v -> {
             mGamepad.resetPositions();
             dismissRuntimeActions();
             Toast.makeText(this, "Layout reset to default", Toast.LENGTH_SHORT).show();
@@ -559,6 +559,10 @@ public class MainActivity extends SDLActivity
             LayoutParams.MATCH_PARENT
         ));
         mRuntimeActionsOverlay = overlay;
+        // Keep menu pill visible above the overlay
+        if (mMenuPill != null) {
+            mMenuPill.bringToFront();
+        }
     }
 
     private void toggleControllerPreset()
@@ -832,49 +836,30 @@ public class MainActivity extends SDLActivity
         mEditMode = true;
         mGamepad.setEditMode(true);
 
-        // Show a glassy toolbar at the bottom with SAVE, REVERT, CANCEL
+        // Show a small centered toolbar at the bottom — no full-screen overlay,
+        // so touches pass through to gamepad buttons for dragging.
         if (mLayout != null && mEditModeOverlay == null) {
             LinearLayout toolbar = new LinearLayout(this);
             toolbar.setOrientation(LinearLayout.HORIZONTAL);
-            toolbar.setPadding(dp(16), dp(12), dp(16), dp(16));
+            toolbar.setPadding(dp(8), dp(6), dp(8), dp(6));
 
             android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-            bg.setColor(Color.argb(190, 10, 9, 14));
-            bg.setStroke(dp(1), Color.argb(70, 220, 200, 160));
-            bg.setCornerRadius(dp(16));
+            bg.setColor(Color.argb(200, 10, 9, 14));
+            bg.setStroke(dp(1), Color.argb(80, 220, 200, 160));
+            bg.setCornerRadius(dp(14));
             toolbar.setBackground(bg);
 
             // SAVE button
-            TextView save = new TextView(this);
-            save.setText("SAVE");
-            save.setTextColor(Color.argb(230, 160, 230, 140));
-            save.setTextSize(14);
-            save.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            save.setGravity(android.view.Gravity.CENTER);
-            save.setPadding(dp(24), dp(12), dp(24), dp(12));
-            android.graphics.drawable.GradientDrawable saveBg = new android.graphics.drawable.GradientDrawable();
-            saveBg.setColor(Color.argb(50, 120, 190, 100));
-            saveBg.setStroke(dp(1), Color.argb(90, 160, 230, 140));
-            saveBg.setCornerRadius(dp(10));
-            save.setBackground(saveBg);
+            TextView save = smallEditButton("SAVE", Color.argb(230, 160, 230, 140),
+                Color.argb(50, 120, 190, 100), Color.argb(90, 160, 230, 140));
             save.setOnClickListener(v -> {
                 mGamepad.savePositions();
                 exitEditMode();
             });
 
             // REVERT button
-            TextView revertBtn = new TextView(this);
-            revertBtn.setText("REVERT");
-            revertBtn.setTextColor(Color.argb(210, 220, 200, 180));
-            revertBtn.setTextSize(14);
-            revertBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            revertBtn.setGravity(android.view.Gravity.CENTER);
-            revertBtn.setPadding(dp(24), dp(12), dp(24), dp(12));
-            android.graphics.drawable.GradientDrawable revertBg = new android.graphics.drawable.GradientDrawable();
-            revertBg.setColor(Color.argb(50, 190, 120, 100));
-            revertBg.setStroke(dp(1), Color.argb(90, 230, 160, 140));
-            revertBg.setCornerRadius(dp(10));
-            revertBtn.setBackground(revertBg);
+            TextView revertBtn = smallEditButton("REVERT", Color.argb(210, 220, 200, 180),
+                Color.argb(50, 190, 120, 100), Color.argb(90, 230, 160, 140));
             revertBtn.setOnClickListener(v -> {
                 mGamepad.resetPositions();
                 exitEditMode();
@@ -882,46 +867,47 @@ public class MainActivity extends SDLActivity
             });
 
             // CANCEL button
-            TextView cancel = new TextView(this);
-            cancel.setText("CANCEL");
-            cancel.setTextColor(Color.argb(180, 180, 170, 155));
-            cancel.setTextSize(13);
-            cancel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            cancel.setGravity(android.view.Gravity.CENTER);
-            cancel.setPadding(dp(20), dp(12), dp(20), dp(12));
-            android.graphics.drawable.GradientDrawable cancelBg = new android.graphics.drawable.GradientDrawable();
-            cancelBg.setColor(Color.argb(35, 180, 170, 155));
-            cancelBg.setStroke(dp(1), Color.argb(55, 180, 170, 155));
-            cancelBg.setCornerRadius(dp(10));
-            cancel.setBackground(cancelBg);
+            TextView cancel = smallEditButton("CANCEL", Color.argb(180, 180, 170, 155),
+                Color.argb(35, 180, 170, 155), Color.argb(55, 180, 170, 155));
             cancel.setOnClickListener(v -> exitEditMode());
 
-            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
-            btnParams.setMargins(dp(4), 0, dp(4), 0);
+            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+            btnParams.setMargins(dp(3), 0, dp(3), 0);
             toolbar.addView(save, btnParams);
             toolbar.addView(revertBtn, btnParams);
             toolbar.addView(cancel, btnParams);
 
-            // Wrap in a FrameLayout overlay
-            mEditModeOverlay = new FrameLayout(this);
-            mEditModeOverlay.setBackgroundColor(Color.argb(55, 0, 0, 0));
-            mEditModeOverlay.setOnTouchListener((v, evt) -> true);
-
-            FrameLayout.LayoutParams toolbarParams = new FrameLayout.LayoutParams(
-                LayoutParams.MATCH_PARENT,
+            // Add to layout — small floating panel at bottom center
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT,
                 LayoutParams.WRAP_CONTENT
             );
-            toolbarParams.gravity = android.view.Gravity.BOTTOM;
-            toolbarParams.setMargins(dp(16), 0, dp(16), dp(20));
-            ((FrameLayout) mEditModeOverlay).addView(toolbar, toolbarParams);
-
-            mLayout.addView(mEditModeOverlay, new RelativeLayout.LayoutParams(
-                LayoutParams.MATCH_PARENT,
-                LayoutParams.MATCH_PARENT
-            ));
+            params.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            params.addRule(RelativeLayout.CENTER_HORIZONTAL);
+            params.setMargins(0, 0, 0, dp(16));
+            mLayout.addView(toolbar, params);
+            mEditModeOverlay = toolbar;
         }
 
         Toast.makeText(this, "Edit mode: drag buttons to reposition", Toast.LENGTH_SHORT).show();
+    }
+
+    private TextView smallEditButton(String text, int textColor, int bgColor, int strokeColor)
+    {
+        TextView btn = new TextView(this);
+        btn.setText(text);
+        btn.setTextColor(textColor);
+        btn.setTextSize(12);
+        btn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btn.setGravity(android.view.Gravity.CENTER);
+        btn.setPadding(dp(14), dp(8), dp(14), dp(8));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(bgColor);
+        bg.setStroke(dp(1), strokeColor);
+        bg.setCornerRadius(dp(8));
+        btn.setBackground(bg);
+        return btn;
     }
 
     private void exitEditMode()
