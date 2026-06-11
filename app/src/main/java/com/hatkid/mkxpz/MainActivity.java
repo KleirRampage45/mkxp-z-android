@@ -209,9 +209,11 @@ public class MainActivity extends SDLActivity
         mGamepad.setOnTapConfirmListener(() -> {
             mMainHandler.post(() -> {
                 SDLActivity.onNativeKeyDown(mGamepadConfig.keycodeA);
-                try { Thread.sleep(20); } catch (InterruptedException ignored) {}
-                SDLActivity.onNativeKeyUp(mGamepadConfig.keycodeA);
             });
+            // Release after a short delay to simulate a press
+            mMainHandler.postDelayed(() -> {
+                SDLActivity.onNativeKeyUp(mGamepadConfig.keycodeA);
+            }, 30);
         });
 
         // Attach gamepad after the target layout exists. Portrait mode needs a
