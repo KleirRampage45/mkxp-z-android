@@ -72,9 +72,6 @@ public class Gamepad
     private GamepadButton gpadBtnDASH;
     private GamepadButton gpadBtnCONFIRM;
     private GamepadButton gpadBtnBACK;
-    private View buttonsActionLayout;
-    private View buttonsModLayout;
-    private View buttonsSimplifiedLayout;
     private GamepadDPad gpadDPad;
 
     // All gamepad buttons array for iteration
@@ -138,9 +135,6 @@ public class Gamepad
         gpadBtnDASH = layout.findViewById(R.id.button_DASH);
         gpadBtnCONFIRM = layout.findViewById(R.id.button_CONFIRM);
         gpadBtnBACK = layout.findViewById(R.id.button_BACK);
-        buttonsActionLayout = layout.findViewById(R.id.buttons_action_layout);
-        buttonsModLayout = layout.findViewById(R.id.buttons_mod_layout);
-        buttonsSimplifiedLayout = layout.findViewById(R.id.buttons_simplified_layout);
 
         // Collect all buttons for iteration
         allButtons = new GamepadButton[] {
@@ -191,11 +185,10 @@ public class Gamepad
             }
         };
 
-        // Only L, R, and DPad are direct children of the root RelativeLayout
-        // and can be freely repositioned via margins. Buttons inside containers
-        // (simplified/action/mod layouts) stay in their preset positions.
-        if (gpadBtnL != null) gpadBtnL.setOnDragListener(dragListener);
-        if (gpadBtnR != null) gpadBtnR.setOnDragListener(dragListener);
+        // Setup drag listener for ALL buttons (now all are direct children of root)
+        for (GamepadButton btn : allButtons) {
+            if (btn != null) btn.setOnDragListener(dragListener);
+        }
         if (gpadDPad != null) gpadDPad.setOnDragListener(dragListener);
 
         // Setup in-screen gamepad touch listener — simple pass-through
@@ -443,14 +436,26 @@ public class Gamepad
     public void applyPreset()
     {
         boolean isFull = "FULL".equals(mGamepadConfig.preset);
-        if (buttonsActionLayout != null) {
-            buttonsActionLayout.setVisibility(isFull ? View.VISIBLE : View.GONE);
-        }
-        if (buttonsModLayout != null) {
-            buttonsModLayout.setVisibility(isFull ? View.VISIBLE : View.GONE);
-        }
-        if (buttonsSimplifiedLayout != null) {
-            buttonsSimplifiedLayout.setVisibility(isFull ? View.GONE : View.VISIBLE);
+        // Full-mode-only buttons: hidden in SIMPLIFIED, visible in FULL
+        setVisible(gpadBtnA, isFull);
+        setVisible(gpadBtnB, isFull);
+        setVisible(gpadBtnC, isFull);
+        setVisible(gpadBtnX, isFull);
+        setVisible(gpadBtnY, isFull);
+        setVisible(gpadBtnZ, isFull);
+        setVisible(gpadBtnCTRL, isFull);
+        setVisible(gpadBtnALT, isFull);
+        setVisible(gpadBtnSHIFT, isFull);
+        // Core buttons: always visible in both modes
+        setVisible(gpadBtnCONFIRM, true);
+        setVisible(gpadBtnBACK, true);
+        setVisible(gpadBtnDASH, true);
+    }
+
+    private void setVisible(View v, boolean visible)
+    {
+        if (v != null) {
+            v.setVisibility(visible ? View.VISIBLE : View.GONE);
         }
     }
 
