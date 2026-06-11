@@ -93,6 +93,7 @@ public class MainActivity extends SDLActivity
     // Edit mode for gamepad layout
     private boolean mEditMode = false;
     private View mEditModeOverlay;
+    private View mMenuPill;
 
     // Tap-to-skip: how long since last gamepad button touch
 
@@ -245,6 +246,7 @@ public class MainActivity extends SDLActivity
         if (mLayout == null) return;
         TextView menu = floatingPill();
         menu.setOnClickListener(v -> showRuntimeActions());
+        mMenuPill = menu;
         RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
             LayoutParams.WRAP_CONTENT,
             LayoutParams.WRAP_CONTENT
@@ -471,14 +473,16 @@ public class MainActivity extends SDLActivity
     {
         if (mLayout == null) return;
         if (mEditMode) {
-            // Don't show runtime menu in edit mode
             return;
         }
         if (mRuntimeActionsOverlay != null) {
             mLayout.removeView(mRuntimeActionsOverlay);
             mRuntimeActionsOverlay = null;
+            if (mMenuPill != null) mMenuPill.setRotation(0f);
             return;
         }
+        if (mMenuPill != null) mMenuPill.setRotation(180f);
+
         FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.argb(50, 0, 0, 0));
         overlay.setClickable(true);
@@ -489,8 +493,8 @@ public class MainActivity extends SDLActivity
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(10), dp(8), dp(10), dp(8));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(Color.argb(155, 10, 9, 14));
-        bg.setStroke(dp(1), Color.argb(55, 220, 200, 160));
+        bg.setColor(Color.argb(165, 10, 9, 14));
+        bg.setStroke(dp(1), Color.argb(60, 220, 200, 160));
         bg.setCornerRadius(dp(10));
         panel.setBackground(bg);
         panel.setClickable(true);
@@ -505,43 +509,43 @@ public class MainActivity extends SDLActivity
         }), weightedParams(dp(6), 0));
         panel.addView(topRow);
 
-        // Toggle controls
-        panel.addView(runtimeToggleButton(!mHideVirtualGamepad, v -> {
+        // Second row: BASIC/FULL toggle + CONTROLS ON/OFF
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setOrientation(LinearLayout.HORIZONTAL);
+        boolean isFull = "FULL".equals(mGamepadConfig.preset);
+        modeRow.addView(runtimeButton(isFull ? "BASIC MODE" : "FULL MODE", R.drawable.ic_runtime_edit, v -> {
+            dismissRuntimeActions();
+            toggleControllerPreset();
+        }), weightedParams(0, dp(6)));
+        modeRow.addView(runtimeToggleButton(!mHideVirtualGamepad, v -> {
             toggleNativeControls();
             dismissRuntimeActions();
-        }));
+        }), weightedParams(dp(6), 0));
+        panel.addView(modeRow);
 
-        // Keyboard button
-        panel.addView(runtimeButton("KEYBOARD", R.drawable.ic_runtime_keyboard, v -> {
+        // Keyboard + Edit Layout + Revert row
+        LinearLayout thirdRow = new LinearLayout(this);
+        thirdRow.setOrientation(LinearLayout.HORIZONTAL);
+        thirdRow.addView(runtimeButton("KEYBOARD", R.drawable.ic_runtime_keyboard, v -> {
             dismissRuntimeActions();
-            org.libsdl.app.SDLActivity.showTextInput(0, 0, 1, 1);
-        }));
-
-        // Divider
-        View div = new View(this);
-        div.setBackgroundColor(Color.argb(40, 220, 200, 160));
-        LinearLayout.LayoutParams divParams = new LinearLayout.LayoutParams(
-            LayoutParams.MATCH_PARENT, dp(1)
-        );
-        divParams.setMargins(0, dp(4), 0, dp(4));
-        panel.addView(div, divParams);
-
-        // Edit Layout button
-        panel.addView(runtimeButton("EDIT LAYOUT", R.drawable.ic_runtime_edit, v -> {
+            // Show text input centered in the screen
+            int screenH = getResources().getDisplayMetrics().heightPixels;
+            SDLActivity.showTextInput(0, screenH / 3, 1, 1);
+        }), weightedParams(0, dp(6)));
+        thirdRow.addView(runtimeButton("EDIT", R.drawable.ic_runtime_edit, v -> {
             dismissRuntimeActions();
             enterEditMode();
-        }));
-
-        // Revert to Default button
-        panel.addView(runtimeButton("REVERT", R.drawable.ic_runtime_home, v -> {
+        }), weightedParams(dp(6), dp(6)));
+        thirdRow.addView(runtimeButton("REVERT", R.drawable.ic_runtime_home, v -> {
             mGamepad.resetPositions();
             dismissRuntimeActions();
             Toast.makeText(this, "Layout reset to default", Toast.LENGTH_SHORT).show();
-        }));
+        }), weightedParams(dp(6), 0));
+        panel.addView(thirdRow);
 
         // Position the panel at the top, centered horizontally
-        int panelWidth = Math.max(dp(240), Math.min(
-            getResources().getDisplayMetrics().widthPixels - dp(80), dp(400)
+        int panelWidth = Math.max(dp(230), Math.min(
+            getResources().getDisplayMetrics().widthPixels - dp(60), dp(380)
         ));
         FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
             panelWidth,
@@ -557,12 +561,23 @@ public class MainActivity extends SDLActivity
         mRuntimeActionsOverlay = overlay;
     }
 
+    private void toggleControllerPreset()
+    {
+        boolean isFull = "FULL".equals(mGamepadConfig.preset);
+        mGamepadConfig.preset = isFull ? "SIMPLIFIED" : "FULL";
+        mGamepad.applyPreset();
+        // Re-save positions for new preset
+        mGamepad.savePositions();
+        Toast.makeText(this, "Controller: " + mGamepadConfig.preset, Toast.LENGTH_SHORT).show();
+    }
+
     private void dismissRuntimeActions()
     {
         if (mRuntimeActionsOverlay != null && mLayout != null) {
             mLayout.removeView(mRuntimeActionsOverlay);
             mRuntimeActionsOverlay = null;
         }
+        if (mMenuPill != null) mMenuPill.setRotation(0f);
     }
 
     private void toggleNativeControls()
@@ -893,11 +908,11 @@ public class MainActivity extends SDLActivity
             mEditModeOverlay.setOnTouchListener((v, evt) -> true);
 
             FrameLayout.LayoutParams toolbarParams = new FrameLayout.LayoutParams(
-                LayoutParams.WRAP_CONTENT,
+                LayoutParams.MATCH_PARENT,
                 LayoutParams.WRAP_CONTENT
             );
-            toolbarParams.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
-            toolbarParams.setMargins(0, 0, 0, dp(20));
+            toolbarParams.gravity = android.view.Gravity.BOTTOM;
+            toolbarParams.setMargins(dp(16), 0, dp(16), dp(20));
             ((FrameLayout) mEditModeOverlay).addView(toolbar, toolbarParams);
 
             mLayout.addView(mEditModeOverlay, new RelativeLayout.LayoutParams(
@@ -945,7 +960,7 @@ public class MainActivity extends SDLActivity
             mGamepadInvisible = false;
         }
 
-        // Tap-to-skip: on ACTION_UP over empty game area, send Confirm key
+        // Tap-to-skip: on ACTION_UP over empty game area, send Confirm key + mouse click
         if (!mEditMode && evt.getAction() == MotionEvent.ACTION_UP) {
             float x = evt.getRawX();
             float y = evt.getRawY();
@@ -955,6 +970,18 @@ public class MainActivity extends SDLActivity
                 mMainHandler.postDelayed(() -> {
                     SDLActivity.onNativeKeyUp(mGamepadConfig.keycodeA);
                 }, 30);
+                // Also inject mouse click at tap position for click-to-move support
+                // Convert screen coords to surface coords (account for layout offset)
+                int[] surfaceLoc = new int[2];
+                if (mSurface != null) {
+                    mSurface.getLocationOnScreen(surfaceLoc);
+                    float surfaceX = x - surfaceLoc[0];
+                    float surfaceY = y - surfaceLoc[1];
+                    SDLActivity.onNativeMouse(0, MotionEvent.ACTION_DOWN, surfaceX, surfaceY, false);
+                    mMainHandler.postDelayed(() -> {
+                        SDLActivity.onNativeMouse(0, MotionEvent.ACTION_UP, surfaceX, surfaceY, false);
+                    }, 20);
+                }
             }
         }
 

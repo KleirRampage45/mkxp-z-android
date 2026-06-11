@@ -196,6 +196,7 @@ public class Gamepad
         // (simplified/action/mod layouts) stay in their preset positions.
         if (gpadBtnL != null) gpadBtnL.setOnDragListener(dragListener);
         if (gpadBtnR != null) gpadBtnR.setOnDragListener(dragListener);
+        if (gpadDPad != null) gpadDPad.setOnDragListener(dragListener);
 
         // Setup in-screen gamepad touch listener — simple pass-through
         mGamepadLayout.setOnTouchListener((view, motionEvent) -> false);
