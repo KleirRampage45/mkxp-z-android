@@ -74,6 +74,7 @@ LOCAL_SRC_FILES := \
 	$(LOCAL_PATH)/src/display/gl/tileatlasvx.cpp \
 	$(LOCAL_PATH)/src/display/gl/tilequad.cpp \
 	$(LOCAL_PATH)/src/display/gl/vertex.cpp \
+	$(LOCAL_PATH)/src/display/filter_chain.cpp \
 	$(LOCAL_PATH)/src/display/libnsgif/libnsgif.c \
 	$(LOCAL_PATH)/src/display/libnsgif/lzw.c \
 	$(LOCAL_PATH)/src/input/input.cpp \
