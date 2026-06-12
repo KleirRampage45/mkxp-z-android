@@ -42,6 +42,9 @@
 #include <stdio.h>
 #include <string>
 #include <chrono>
+#ifdef MKXPZ_BUILD_ANDROID
+#include <dirent.h>
+#endif
 
 SharedState *SharedState::instance = 0;
 int SharedState::rgssVersion = 0;
@@ -59,6 +62,72 @@ static const char *gameArchExt()
 	assert(!"unreachable");
 	return 0;
 }
+
+#ifdef MKXPZ_BUILD_ANDROID
+static bool isAbsolutePath(const std::string &path)
+{
+	return !path.empty() && path[0] == '/';
+}
+
+static std::string joinPath(const std::string &base, const std::string &child)
+{
+	if (base.empty())
+		return child;
+	if (child.empty())
+		return base;
+	if (base[base.size() - 1] == '/')
+		return base + child;
+	return base + "/" + child;
+}
+
+static bool hasRtpAssetDirs(const std::string &path)
+{
+	return mkxp_fs::directoryExists(joinPath(path, "Graphics").c_str()) ||
+	       mkxp_fs::directoryExists(joinPath(path, "Audio").c_str());
+}
+
+static std::string findRtpAssetRoot(const std::string &path)
+{
+	if (hasRtpAssetDirs(path))
+		return path;
+
+	DIR *dir = opendir(path.c_str());
+	if (!dir)
+		return path;
+
+	std::string found;
+	while (dirent *entry = readdir(dir))
+	{
+		std::string name(entry->d_name);
+		if (name == "." || name == "..")
+			continue;
+
+		std::string child = joinPath(path, name);
+		if (mkxp_fs::directoryExists(child.c_str()) && hasRtpAssetDirs(child))
+		{
+			found = child;
+			break;
+		}
+	}
+
+	closedir(dir);
+	return found.empty() ? path : found;
+}
+
+static std::string resolveRtpPath(const Config &config, const std::string &rtpPath)
+{
+	std::string resolved = rtpPath;
+
+	if (!isAbsolutePath(resolved))
+	{
+		if (!config.gameFolder.empty())
+			resolved = joinPath(config.gameFolder, resolved);
+		resolved = mkxp_fs::normalizePath(resolved.c_str(), false, true);
+	}
+
+	return findRtpAssetRoot(resolved);
+}
+#endif
 
 struct SharedStatePrivate
 {
@@ -140,7 +209,15 @@ struct SharedStatePrivate
 		fileSystem.addPath(".");
 
 		for (size_t i = 0; i < config.rtps.size(); ++i)
+		{
+#ifdef MKXPZ_BUILD_ANDROID
+			std::string rtpPath = resolveRtpPath(config, config.rtps[i]);
+			Debug() << "Mounting RTP path" << rtpPath;
+			fileSystem.addPath(rtpPath.c_str());
+#else
 			fileSystem.addPath(config.rtps[i].c_str());
+#endif
+		}
 
 		if (config.pathCache)
 			fileSystem.createPathCache();
