@@ -83,6 +83,7 @@ private:
 
     // Fullscreen quad geometry
     GLuint quadVBO;
+    GLuint quadIBO;
 
     void ensureBuffers(int w, int h);
     void initQuad();
