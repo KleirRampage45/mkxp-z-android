@@ -9,7 +9,6 @@
 #include "glstate.h"
 #include "sharedstate.h"
 #include "filesystem/filesystem.h"
-#include "util/encoding.h"
 
 #include <sys/stat.h>
 #include <cstring>
@@ -51,14 +50,6 @@ bool FilterShader::compile(const char *vertSrc, int vertLen,
 
     // Vertex shader
     {
-        const GLchar *srcs[3];
-        GLint sizes[3];
-        int i = 0;
-        if (gl.glsles) { srcs[i] = glesDefine; sizes[i] = sizeof(glesDefine)-1; i++; }
-        srcs[i] = (const GLchar*)shader_filterQuad_vert; sizes[i] = 0; i++; // placeholder
-        srcs[i] = (const GLchar*)vertSrc; sizes[i] = vertLen; i++;
-        // Actually, we need the common header. Let's use the shader_common from the build.
-        // For filter shaders, we prepend our own precision since we're standalone.
         std::string header = gl.glsles ?
             "#ifdef FRAGMENT_SHADER\nprecision mediump float;\n#endif\n" :
             "#define highp\n#define mediump\n#define lowp\n";
@@ -192,6 +183,7 @@ FilterChain::~FilterChain() {
         TEXFBO::fini(pingPong[1]);
     }
     if (quadVBO) gl.DeleteBuffers(1, &quadVBO);
+    if (quadIBO) gl.DeleteBuffers(1, &quadIBO);
 }
 
 void FilterChain::initQuad() {
@@ -211,9 +203,8 @@ void FilterChain::initQuad() {
     gl.BufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // Store index data in a separate IBO
-    GLuint ibo;
-    gl.GenBuffers(1, &ibo);
-    gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    gl.GenBuffers(1, &quadIBO);
+    gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIBO);
     gl.BufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
     gl.BindBuffer(GL_ARRAY_BUFFER, 0);
@@ -222,6 +213,7 @@ void FilterChain::initQuad() {
 
 void FilterChain::drawQuad() {
     gl.BindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadIBO);
 
     // position (location 0)
     gl.EnableVertexAttribArray(0);
@@ -231,10 +223,11 @@ void FilterChain::drawQuad() {
     gl.EnableVertexAttribArray(1);
     gl.VertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
-    gl.DrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    gl.DrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
     gl.DisableVertexAttribArray(0);
     gl.DisableVertexAttribArray(1);
+    gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     gl.BindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -265,19 +258,19 @@ FilterConfig FilterChain::parseConfig(const json5pp::value &json) {
 
     auto &obj = json.as_object();
 
-    cfg.enabled = obj["enabled"].as_boolean();
-    cfg.preset = obj.count("preset") ? obj["preset"].as_string() : "unknown";
-    cfg.aspectMode = obj.count("aspectMode") ? obj["aspectMode"].as_string() : "fit_4_3";
+    cfg.enabled = obj.at("enabled").as_boolean();
+    cfg.preset = obj.count("preset") ? obj.at("preset").as_string() : "unknown";
+    cfg.aspectMode = obj.count("aspectMode") ? obj.at("aspectMode").as_string() : "fit_4_3";
 
-    if (obj.count("passes") && obj["passes"].is_array()) {
-        auto &passes = obj["passes"].as_array();
+    if (obj.count("passes") && obj.at("passes").is_array()) {
+        auto &passes = obj.at("passes").as_array();
         for (auto &p : passes) {
             if (!p.is_object()) continue;
             auto &pObj = p.as_object();
             FilterPassConfig pass;
-            pass.shader = pObj["shader"].as_string();
-            if (pObj.count("params") && pObj["params"].is_object()) {
-                auto &params = pObj["params"].as_object();
+            pass.shader = pObj.at("shader").as_string();
+            if (pObj.count("params") && pObj.at("params").is_object()) {
+                auto &params = pObj.at("params").as_object();
                 for (auto &kv : params) {
                     if (kv.second.is_number()) {
                         pass.params[kv.first] = kv.second.as_number();
@@ -333,20 +326,20 @@ bool FilterChain::compileShader(FilterShader &shader, const char *name) {
     };
 
     // All filter shaders use the same vertex shader
-    static const unsigned char *vertSrc = filterQuad_vert;
-    static int vertLen = filterQuad_vert_len;
+    static const unsigned char *vertSrc = shader_filterQuad_vert;
+    static int vertLen = shader_filterQuad_vert_len;
 
     const unsigned char *fragSrc = nullptr;
     int fragLen = 0;
 
     if (strcmp(name, "passthrough") == 0) {
-        fragSrc = filterPassthrough_frag; fragLen = filterPassthrough_frag_len;
+        fragSrc = shader_filterPassthrough_frag; fragLen = shader_filterPassthrough_frag_len;
     } else if (strcmp(name, "brightness_contrast") == 0) {
-        fragSrc = filterBrightnessContrast_frag; fragLen = filterBrightnessContrast_frag_len;
+        fragSrc = shader_filterBrightnessContrast_frag; fragLen = shader_filterBrightnessContrast_frag_len;
     } else if (strcmp(name, "sharp_bilinear") == 0) {
-        fragSrc = filterSharpBilinear_frag; fragLen = filterSharpBilinear_frag_len;
+        fragSrc = shader_filterSharpBilinear_frag; fragLen = shader_filterSharpBilinear_frag_len;
     } else if (strcmp(name, "sharpen") == 0) {
-        fragSrc = filterSharpen_frag; fragLen = filterSharpen_frag_len;
+        fragSrc = shader_filterSharpen_frag; fragLen = shader_filterSharpen_frag_len;
     } else {
         Debug() << "FilterChain: unknown shader" << name;
         return false;
