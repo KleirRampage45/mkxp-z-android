@@ -44,6 +44,7 @@
 #include "util.h"
 #include "input.h"
 #include "sprite.h"
+#include "filter_chain.h"
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -821,6 +822,10 @@ struct GraphicsPrivate {
     
     SDL_mutex *glResourceLock;
     bool multithreadedMode;
+
+    /* Visual filter chain (Runestone post-processing) */
+    FilterChain filterChain;
+    std::string filterConfigPath;
     
     /* Global list of all live Disposables
      * (disposed on reset) */
@@ -856,6 +861,10 @@ struct GraphicsPrivate {
         screenQuad.setTexPosRect(screenRect, screenRect);
         
         fpsLimiter.resetFrameAdjust();
+        
+        // Load visual filter config if present
+        filterConfigPath = rtData->config.gameFolder + "/runestone-filters.json";
+        filterChain.loadConfig(filterConfigPath.c_str());
     }
     
     ~GraphicsPrivate() {
@@ -1023,12 +1032,24 @@ struct GraphicsPrivate {
     
     void redrawScreen() {
         screen.composite();
+
+        // Check for filter config updates (once per frame)
+        filterChain.checkForUpdate(filterConfigPath.c_str());
+
+        // Get the composited scene source
+        TEXFBO *sceneSource = &screen.getPP().frontBuffer();
+
+        // Apply visual filter chain if enabled
+        if (filterChain.isEnabled()) {
+            sceneSource = &filterChain.execute(
+                *sceneSource, scRes.x, scRes.y, scRes.x, scRes.y);
+        }
         
         // maybe unspaghetti this later
         if (integerScaleStepApplicable() && !integerLastMileScaling)
         {
             GLMeta::blitBeginScreen(winSize);
-            GLMeta::blitSource(screen.getPP().frontBuffer());
+            GLMeta::blitSource(*sceneSource);
             
             FBO::clear();
             metaBlitBufferFlippedScaled(scRes, true);
@@ -1042,7 +1063,7 @@ struct GraphicsPrivate {
         {
             assert(integerScaleBuffer.tex != TEX::ID(0));
             GLMeta::blitBegin(integerScaleBuffer);
-            GLMeta::blitSource(screen.getPP().frontBuffer());
+            GLMeta::blitSource(*sceneSource);
             
             GLMeta::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
                                   IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height),
@@ -1063,7 +1084,7 @@ struct GraphicsPrivate {
         }
         else
         {
-            GLMeta::blitSource(screen.getPP().frontBuffer());
+            GLMeta::blitSource(*sceneSource);
             sourceSize = scRes;
         }
         
